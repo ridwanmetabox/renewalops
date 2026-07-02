@@ -1,0 +1,10 @@
+{
+  "name": "renewalops-root",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix renewalops run dev",
+    "build": "npm --prefix renewalops run build",
+    "start": "npm --prefix renewalops run start",
+    "lint": "npm --prefix renewalops run lint"
+  }
+}
