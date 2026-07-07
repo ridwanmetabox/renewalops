@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+  VIEWER
+}
+
+enum ContractType {
+  MAINTENANCE
+  SUPPORT
+  SERVICE
+}
+
+enum ContractStatus {
+  ACTIVE
+  EXPIRING_SOON
+  OVERDUE
+  RENEWED
+  DECLINED
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model AppUser {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  name      String?
+  email     String   @unique
+  role      UserRole @default(STAFF)
+
+  assignedContracts Contract[] @relation("AssignedContracts")
+  notes             InternalNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Client {
+  id            String  @id @default(cuid())
+  companyName   String
+  contactPerson String?
+  email         String?
+  phone         String?
+  address       String?
+
+  contracts Contract[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Contract {
+  id              String         @id @default(cuid())
+  contractName    String
+  contractType    ContractType
+  status          ContractStatus @default(ACTIVE)
+
+  startDate       DateTime
+  renewalDate     DateTime
+  contractValue   Float?
+  autoRenewal     Boolean        @default(false)
+
+  clientId        String
+  client          Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  assignedStaffId String?
+  assignedStaff   AppUser?       @relation("AssignedContracts", fields: [assignedStaffId], references: [id])
+
+  reminders       RenewalReminder[]
+  emailLogs       EmailLog[]
+  notes           InternalNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RenewalReminder {
+  id          String   @id @default(cuid())
+  contractId  String
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  daysBefore  Int
+  sent        Boolean  @default(false)
+  sentAt      DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model EmailTemplate {
+  id        String @id @default(cuid())
+  name      String
+  subject   String
+  body      String
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EmailLog {
+  id            String      @id @default(cuid())
+  contractId    String
+  contract      Contract    @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  recipient     String
+  subject       String
+  reminderStage String?
+  status        EmailStatus @default(PENDING)
+  errorMessage  String?
+  sentAt        DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model InternalNote {
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  authorId   String?
+  author     AppUser? @relation(fields: [authorId], references: [id])
+
+  note       String
+
+  createdAt DateTime @default(now())
+}
