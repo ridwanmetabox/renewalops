@@ -33,13 +33,13 @@ enum EmailStatus {
 }
 
 model AppUser {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique
-  name      String?
-  email     String   @unique
-  role      UserRole @default(STAFF)
+  id      String   @id @default(cuid())
+  clerkId String   @unique
+  name    String?
+  email   String   @unique
+  role    UserRole @default(STAFF)
 
-  assignedContracts Contract[] @relation("AssignedContracts")
+  assignedContracts Contract[]     @relation("AssignedContracts")
   notes             InternalNote[]
 
   createdAt DateTime @default(now())
@@ -61,44 +61,44 @@ model Client {
 }
 
 model Contract {
-  id              String         @id @default(cuid())
-  contractName    String
-  contractType    ContractType
-  status          ContractStatus @default(ACTIVE)
+  id           String         @id @default(cuid())
+  contractName String
+  contractType ContractType
+  status       ContractStatus @default(ACTIVE)
 
-  startDate       DateTime
-  renewalDate     DateTime
-  contractValue   Float?
-  autoRenewal     Boolean        @default(false)
+  startDate     DateTime
+  renewalDate   DateTime
+  contractValue Float?
+  autoRenewal   Boolean  @default(false)
 
-  clientId        String
-  client          Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   assignedStaffId String?
-  assignedStaff   AppUser?       @relation("AssignedContracts", fields: [assignedStaffId], references: [id])
+  assignedStaff   AppUser? @relation("AssignedContracts", fields: [assignedStaffId], references: [id])
 
-  reminders       RenewalReminder[]
-  emailLogs       EmailLog[]
-  notes           InternalNote[]
+  reminders RenewalReminder[]
+  emailLogs EmailLog[]
+  notes     InternalNote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model RenewalReminder {
-  id          String   @id @default(cuid())
-  contractId  String
-  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
-  daysBefore  Int
-  sent        Boolean  @default(false)
-  sentAt      DateTime?
+  daysBefore Int
+  sent       Boolean   @default(false)
+  sentAt     DateTime?
 
   createdAt DateTime @default(now())
 }
 
 model EmailTemplate {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   name      String
   subject   String
   body      String
@@ -109,9 +109,9 @@ model EmailTemplate {
 }
 
 model EmailLog {
-  id            String      @id @default(cuid())
-  contractId    String
-  contract      Contract    @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
   recipient     String
   subject       String
@@ -128,10 +128,10 @@ model InternalNote {
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
-  authorId   String?
-  author     AppUser? @relation(fields: [authorId], references: [id])
+  authorId String?
+  author   AppUser? @relation(fields: [authorId], references: [id])
 
-  note       String
+  note String
 
   createdAt DateTime @default(now())
 }
