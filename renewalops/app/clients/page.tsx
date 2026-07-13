@@ -1,3 +1,5 @@
+import FrontendApp from "@/app/FrontendApp";
+
 export default function ClientsPage() {
-  return <h1 style={{ padding: "40px" }}>Clients</h1>;
+  return <FrontendApp />;
 }
