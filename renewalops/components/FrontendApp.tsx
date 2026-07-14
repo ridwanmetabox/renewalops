@@ -1,4 +1,5 @@
 "use client";
+import { useTheme } from "next-themes";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { useState, useEffect, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -2210,9 +2211,8 @@ function ContractDetailPage({ contract: initContract, contracts, setContracts, o
 
 // ─── SETTINGS ─────────────────────────────────────────────────────────────────
 
-function SettingsPage({ subpage, onSubpage, toast, darkMode, onToggleDark, userProfile, setUserProfile }: {
+function SettingsPage({ subpage, onSubpage, toast,  userProfile, setUserProfile }: {
   subpage: Page; onSubpage: (p: Page) => void; toast: (msg: string, type?: Toast["type"]) => void;
-  darkMode: boolean; onToggleDark: () => void;
   userProfile: { name: string; email: string; phone: string; role: string };
   setUserProfile: (p: { name: string; email: string; phone: string; role: string }) => void;
 }) {
@@ -2239,7 +2239,7 @@ function SettingsPage({ subpage, onSubpage, toast, darkMode, onToggleDark, userP
           ))}
         </div>
         <div className="lg:col-span-3 bg-card border border-border rounded-xl p-6">
-          {subpage === "settings" && <SettingsPreferences toast={toast} darkMode={darkMode} onToggleDark={onToggleDark} />}
+          {subpage === "settings" && <SettingsPreferences toast={toast} />}
           {subpage === "settings-account" && <SettingsAccount toast={toast} profile={userProfile} setProfile={setUserProfile} />}
           {subpage === "settings-org" && <SettingsOrg toast={toast} />}
           {subpage === "settings-security" && <SettingsSecurity toast={toast} />}
@@ -2252,39 +2252,128 @@ function SettingsPage({ subpage, onSubpage, toast, darkMode, onToggleDark, userP
   );
 }
 
-function SettingsPreferences({ toast, darkMode, onToggleDark }: { toast: (msg: string) => void; darkMode: boolean; onToggleDark: () => void }) {
-  const [prefs, setPrefs] = useState({ emailAlerts: true, failedAlerts: true, renewalAlerts: true, weeklyDigest: false, smsAlerts: false });
-  const toggle = (k: keyof typeof prefs) => { setPrefs(p => ({ ...p, [k]: !p[k] })); toast("Preference saved."); };
+function SettingsPreferences({ toast }: { toast: (msg: string) => void }) {
+  const { resolvedTheme, setTheme } = useTheme();
+
+  const [prefs, setPrefs] = useState({
+    emailAlerts: true,
+    failedAlerts: true,
+    renewalAlerts: true,
+    weeklyDigest: false,
+    smsAlerts: false,
+  });
+
+  const darkMode = resolvedTheme === "dark";
+
+  const toggle = (k: keyof typeof prefs) => {
+    setPrefs((p) => ({ ...p, [k]: !p[k] }));
+    toast("Preference saved.");
+  };
+
+  const handleThemeToggle = () => {
+    const newTheme = darkMode ? "light" : "dark";
+
+    setTheme(newTheme);
+
+    toast(
+      newTheme === "dark"
+        ? "Switched to dark mode."
+        : "Switched to light mode."
+    );
+  };
+
   return (
     <div>
       <h2 className="font-bold text-lg mb-1">Preferences</h2>
-      <p className="text-sm text-muted-foreground mb-6">Configure notification and appearance preferences</p>
+      <p className="text-sm text-muted-foreground mb-6">
+        Configure notification and appearance preferences
+      </p>
 
       <div className="mb-6">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Appearance</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+          Appearance
+        </h3>
+
         <div className="flex items-center justify-between py-3 border-b border-border">
           <div className="flex items-center gap-3">
-            {darkMode ? <Moon className="w-4 h-4 text-muted-foreground" /> : <Sun className="w-4 h-4 text-muted-foreground" />}
+            {darkMode ? (
+              <Moon className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <Sun className="w-4 h-4 text-muted-foreground" />
+            )}
+
             <div>
               <p className="font-medium text-sm">Dark mode</p>
-              <p className="text-xs text-muted-foreground">{darkMode ? "Dark theme active" : "Light theme active"}</p>
+              <p className="text-xs text-muted-foreground">
+                {darkMode ? "Dark theme active" : "Light theme active"}
+              </p>
             </div>
           </div>
-          <Toggle checked={darkMode} onChange={() => { onToggleDark(); toast(darkMode ? "Switched to light mode." : "Switched to dark mode."); }} />
+
+          <Toggle checked={darkMode} onChange={handleThemeToggle} />
         </div>
       </div>
 
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Notifications</h3>
-      {[{ key: "emailAlerts", label: "Email alerts", desc: "Renewal notifications to your email" }, { key: "failedAlerts", label: "Failed email alerts", desc: "Notified when a renewal email fails" }, { key: "renewalAlerts", label: "Upcoming renewal alerts", desc: "Alerts 30 days before renewal" }, { key: "weeklyDigest", label: "Weekly digest", desc: "Summary every Monday morning" }, { key: "smsAlerts", label: "SMS alerts", desc: "Critical alerts via SMS (Mauritius)" }].map(({ key, label, desc }) => (
-        <div key={key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-          <div><p className="font-medium text-sm">{label}</p><p className="text-xs text-muted-foreground">{desc}</p></div>
-          <Toggle checked={(prefs as any)[key]} onChange={() => toggle(key as any)} />
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+          Notifications
+        </h3>
+
+        <div className="space-y-0">
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <div>
+              <p className="font-medium text-sm">Email alerts</p>
+              <p className="text-xs text-muted-foreground">
+                Receive renewal notifications by email
+              </p>
+            </div>
+            <Toggle checked={prefs.emailAlerts} onChange={() => toggle("emailAlerts")} />
+          </div>
+
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <div>
+              <p className="font-medium text-sm">Failed renewal alerts</p>
+              <p className="text-xs text-muted-foreground">
+                Get notified when a renewal email fails
+              </p>
+            </div>
+            <Toggle checked={prefs.failedAlerts} onChange={() => toggle("failedAlerts")} />
+          </div>
+
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <div>
+              <p className="font-medium text-sm">Renewal alerts</p>
+              <p className="text-xs text-muted-foreground">
+                Notify me before contract renewal dates
+              </p>
+            </div>
+            <Toggle checked={prefs.renewalAlerts} onChange={() => toggle("renewalAlerts")} />
+          </div>
+
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <div>
+              <p className="font-medium text-sm">Weekly digest</p>
+              <p className="text-xs text-muted-foreground">
+                Receive a weekly summary of upcoming renewals
+              </p>
+            </div>
+            <Toggle checked={prefs.weeklyDigest} onChange={() => toggle("weeklyDigest")} />
+          </div>
+
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="font-medium text-sm">SMS alerts</p>
+              <p className="text-xs text-muted-foreground">
+                Receive important alerts by SMS
+              </p>
+            </div>
+            <Toggle checked={prefs.smsAlerts} onChange={() => toggle("smsAlerts")} />
+          </div>
         </div>
-      ))}
+      </div>
     </div>
   );
 }
-
 const USER_ROLES = ["Administrator", "Manager", "Senior Staff", "Staff", "Viewer", "Billing Contact", "Support"];
 
 function SettingsAccount({ toast, profile, setProfile }: {
@@ -2673,9 +2762,10 @@ export default function App() {
   const { isLoaded, isSignedIn, user } = useUser();
   const { signOut } = useClerk();
 
+
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState<Page>("dashboard");
-  const [darkMode, setDarkMode] = useState(false);
+
   const [clients, setClients] = useState<Client[]>(INIT_CLIENTS);
   const [contracts, setContracts] = useState<Contract[]>(INIT_CONTRACTS);
   const [notifications, setNotifications] = useState<Notification[]>(INIT_NOTIFICATIONS);
@@ -2699,10 +2789,6 @@ export default function App() {
 
   useEffect(() => { const t = setTimeout(() => setLoading(false), 2400); return () => clearTimeout(t); }, []);
   useEffect(() => { if (!searchQuery) setSearchOpen(false); else setSearchOpen(true); }, [searchQuery]);
-  useEffect(() => {
-    if (darkMode) document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
-  }, [darkMode]);
 
   useEffect(() => {
   if (!isSignedIn) return;
@@ -2790,7 +2876,7 @@ if (!isSignedIn) {
   return (
     <>
       <style>{GLOBAL_CSS}</style>
-      <div className="flex h-screen bg-background overflow-hidden">
+      <div className="flex h-screen bg-background text-foreground overflow-hidden">
         <Sidebar current={page} onNav={handleNav} onSignOut={() => setSignOutOpen(true)} />
         <div className="flex-1 flex flex-col min-w-0 ml-60">
           <TopBar
@@ -2830,9 +2916,16 @@ if (!isSignedIn) {
                     onBack={() => navigate("contracts")} toast={addToast} />
                 )}
                 {(page === "settings" || page.startsWith("settings-")) && (
-                  <SettingsPage subpage={settingsSubpage} onSubpage={p => { setSettingsSubpage(p); navigate(p); }} toast={addToast}
-                    darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}
-                    userProfile={userProfile} setUserProfile={setUserProfile} />
+                 <SettingsPage
+  subpage={settingsSubpage}
+  onSubpage={p => {
+    setSettingsSubpage(p);
+    navigate(p);
+  }}
+  toast={addToast}
+  userProfile={userProfile}
+  setUserProfile={setUserProfile}
+/>
                 )}
                 {page === "admin" && <AdminPage toast={addToast} profile={userProfile} setProfile={setUserProfile} />}
                 {page === "notifications" && <NotificationsPage notifications={notifications} setNotifications={setNotifications} />}
