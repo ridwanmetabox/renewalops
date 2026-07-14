@@ -9,7 +9,9 @@ export async function getCurrentUser() {
     return null;
   }
 
-  const email = clerkUser.emailAddresses[0]?.emailAddress;
+  const email =
+    clerkUser.primaryEmailAddress?.emailAddress ||
+    clerkUser.emailAddresses[0]?.emailAddress;
 
   if (!email) {
     throw new Error("No email address found for this Clerk user.");
@@ -20,22 +22,21 @@ export async function getCurrentUser() {
     `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() ||
     email;
 
-  let appUser = await prisma.appUser.findUnique({
+  const appUser = await prisma.appUser.upsert({
     where: {
       clerkId: clerkUser.id,
     },
+    update: {
+      email,
+      name,
+    },
+    create: {
+      clerkId: clerkUser.id,
+      email,
+      name,
+      role: UserRole.STAFF,
+    },
   });
-
-  if (!appUser) {
-    appUser = await prisma.appUser.create({
-      data: {
-        clerkId: clerkUser.id,
-        email,
-        name,
-        role: UserRole.STAFF,
-      },
-    });
-  }
 
   return appUser;
 }
