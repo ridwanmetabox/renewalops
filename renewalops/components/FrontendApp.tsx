@@ -2,7 +2,7 @@
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { useState, useEffect, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useUser, useClerk, useSignIn } from "@clerk/nextjs";
+import { useUser, useClerk } from "@clerk/nextjs";
 import {
   LayoutDashboard, Users, BookUser, Settings, Bell, Search,
   ChevronRight, ArrowRight, Plus, Edit2, Trash2, Phone, Mail, Eye, EyeOff,
@@ -372,30 +372,6 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
- function GoogleSignInButton() {
-  const { signIn, isLoaded } = useSignIn();
-
-  async function handleGoogleSignIn() {
-    if (!isLoaded) return;
-
-    await signIn.authenticateWithRedirect({
-      strategy: "oauth_google",
-      redirectUrl: "/sso-callback",
-      redirectUrlComplete: "/dashboard",
-    });
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleGoogleSignIn}
-      disabled={!isLoaded}
-      className="w-full py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-50"
-    >
-     <GoogleSignInButton />
-    </button>
-  );
-} 
 
 function LoginPage() {
   return (
