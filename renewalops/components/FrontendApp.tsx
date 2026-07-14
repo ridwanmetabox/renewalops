@@ -1,6 +1,8 @@
 "use client";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { useState, useEffect, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useUser, useClerk, useSignIn } from "@clerk/nextjs";
 import {
   LayoutDashboard, Users, BookUser, Settings, Bell, Search,
   ChevronRight, ArrowRight, Plus, Edit2, Trash2, Phone, Mail, Eye, EyeOff,
@@ -370,102 +372,66 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
+ function GoogleSignInButton() {
+  const { signIn, isLoaded } = useSignIn();
 
-function LoginPage({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
-  const [email, setEmail] = useState("john@company.mu");
-  const [password, setPassword] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [forgotOpen, setForgotOpen] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotSent, setForgotSent] = useState(false);
-  const [error, setError] = useState("");
+  async function handleGoogleSignIn() {
+    if (!isLoaded) return;
 
-  function handleLogin() {
-    if (!email) { setError("Please enter your email address."); return; }
-    if (!password) { setError("Please enter your password."); return; }
-    setError(""); onLogin();
+    await signIn.authenticateWithRedirect({
+      strategy: "oauth_google",
+      redirectUrl: "/sso-callback",
+      redirectUrlComplete: "/dashboard",
+    });
   }
 
+  return (
+    <button
+      type="button"
+      onClick={handleGoogleSignIn}
+      disabled={!isLoaded}
+      className="w-full py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-50"
+    >
+     <GoogleSignInButton />
+    </button>
+  );
+} 
+
+function LoginPage() {
   return (
     <div className="min-h-screen bg-background flex">
       {/* Left panel */}
       <div className="hidden lg:flex w-1/2 bg-foreground text-background flex-col justify-between p-14 relative overflow-hidden">
         <LoginAnimation />
         <div className="relative z-10 flex justify-center w-full">
-          <span className="text-lg font-black tracking-[0.18em] uppercase text-background/70">RenewalOps</span>
+          <span className="text-lg font-black tracking-[0.18em] uppercase text-background/70">
+            RenewalOps
+          </span>
         </div>
-        <p className="relative z-10 text-xs text-background/20">© 2026 RenewalOps — Mauritius</p>
+        <p className="relative z-10 text-xs text-background/20">
+          © 2026 RenewalOps — Mauritius
+        </p>
       </div>
 
       {/* Right panel */}
       <div className="flex-1 flex items-center justify-center px-8 py-12">
         <div className="w-full max-w-sm">
-          <div className="mb-[100px] flex justify-end pr-[110px]"><RenewalOpsLogo size="md" /></div>
-          <h1 className="text-2xl font-bold mb-1">Welcome back</h1>
-          <p className="text-muted-foreground text-sm mb-8">Sign in to your account to continue</p>
-
-          {error && (
-            <div className="flex items-center gap-2 px-3 py-2.5 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-500 mb-4">
-              <XCircle className="w-4 h-4 shrink-0" /> {error}
-            </div>
-          )}
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium block mb-1.5">Email address</label>
-              <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="john@company.mu"
-                className="w-full px-3 py-2.5 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring transition-all" />
-            </div>
-            <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label className="text-sm font-medium">Password</label>
-                <button onClick={() => setForgotOpen(true)} className="text-xs text-muted-foreground hover:text-foreground transition-colors">Forgot password?</button>
-              </div>
-              <div className="relative">
-                <input value={password} onChange={e => setPassword(e.target.value)} type={showPass ? "text" : "password"} placeholder="••••••••"
-                  onKeyDown={e => e.key === "Enter" && handleLogin()}
-                  className="w-full px-3 py-2.5 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring pr-10 transition-all" />
-                <button onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-            <button onClick={handleLogin}
-              className="w-full py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90 active:scale-[0.99] transition-all">
-              Login
-            </button>
+          <div className="mb-[100px] flex justify-end pr-[110px]">
+            <RenewalOpsLogo size="md" />
           </div>
-          <p className="mt-6 text-sm text-center text-muted-foreground">
-            Don&apos;t have an account?{" "}
-            <button onClick={onSignup} className="font-medium text-foreground hover:underline">Create account</button>
+
+          <h1 className="text-2xl font-bold mb-1">Welcome back</h1>
+          <p className="text-muted-foreground text-sm mb-8">
+            Sign in to your account to continue
+          </p>
+
+          <GoogleSignInButton />
+
+          <p className="mt-6 text-xs text-center text-muted-foreground">
+            Secure sign-in powered by Clerk.
           </p>
         </div>
       </div>
-
-      {forgotOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl">
-            {!forgotSent ? (
-              <>
-                <h2 className="font-bold text-lg mb-1">Reset password</h2>
-                <p className="text-sm text-muted-foreground mb-4">Enter your email and we&apos;ll send a reset link.</p>
-                <input value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="your@email.mu" type="email"
-                  className="w-full px-3 py-2.5 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring mb-4" />
-                <div className="flex gap-2">
-                  <button onClick={() => setForgotOpen(false)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent transition-colors">Cancel</button>
-                  <button onClick={() => setForgotSent(true)} className="flex-1 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Send link</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="w-10 h-10 bg-foreground/10 rounded-full flex items-center justify-center mb-3"><Check className="w-5 h-5" /></div>
-                <h2 className="font-bold text-lg mb-1">Check your inbox</h2>
-                <p className="text-sm text-muted-foreground mb-4">A reset link was sent to <strong>{forgotEmail || "your email"}</strong>.</p>
-                <button onClick={() => { setForgotOpen(false); setForgotSent(false); }} className="w-full py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Done</button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -2722,9 +2688,17 @@ function NotificationsPage({ notifications, setNotifications }: { notifications:
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 
 export default function App() {
+  //const [loading, setLoading] = useState(true);
+  //const [isLoggedIn, setIsLoggedIn] = useState(false);
+  //const [page, setPage] = useState<Page>("login");
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const { isLoaded, isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
+
   const [loading, setLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [page, setPage] = useState<Page>("login");
+  const [page, setPage] = useState<Page>("dashboard");
   const [darkMode, setDarkMode] = useState(false);
   const [clients, setClients] = useState<Client[]>(INIT_CLIENTS);
   const [contracts, setContracts] = useState<Contract[]>(INIT_CONTRACTS);
@@ -2736,7 +2710,13 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsSubpage, setSettingsSubpage] = useState<Page>("settings");
   const [signOutOpen, setSignOutOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState({ name: "John Doe", email: "john@company.mu", phone: "+230 5XXX XXXX", role: "Administrator" });
+  //const [userProfile, setUserProfile] = useState({ name: "John Doe", email: "john@company.mu", phone: "+230 5XXX XXXX", role: "Administrator" });
+  const [userProfile, setUserProfile] = useState({
+  name: user?.fullName || "RenewalOps User",
+  email: user?.primaryEmailAddress?.emailAddress || "",
+  phone: "+230 5XXX XXXX",
+  role: "Administrator",
+});
   const { toasts, add: addToast, remove: removeToast } = useToast();
 
   const unreadCount = notifications.filter(n => !n.read && !n.archived).length;
@@ -2748,6 +2728,29 @@ export default function App() {
     else document.documentElement.classList.remove("dark");
   }, [darkMode]);
 
+  useEffect(() => {
+  if (!isSignedIn) return;
+
+  if (pathname.startsWith("/clients")) {
+    setPage("clients");
+  } else if (pathname.startsWith("/contracts")) {
+    setPage("contracts");
+  } else if (pathname.startsWith("/settings")) {
+    setPage("settings");
+  } else {
+    setPage("dashboard");
+  }
+}, [isSignedIn, pathname]);
+useEffect(() => {
+  if (!user) return;
+
+  setUserProfile(prev => ({
+    ...prev,
+    name: user.fullName || "RenewalOps User",
+    email: user.primaryEmailAddress?.emailAddress || "",
+  }));
+}, [user]);
+
   const navigate = useCallback((to: Page) => setPage(to), []);
 
   function handleNav(p: Page) {
@@ -2755,9 +2758,13 @@ export default function App() {
     navigate(p); setSearchQuery(""); setSearchOpen(false);
   }
 
-  function handleLogin() { setIsLoggedIn(true); navigate("dashboard"); }
-  function handleSignup() { setIsLoggedIn(true); navigate("dashboard"); addToast("Welcome to RenewalOps!"); }
-  function handleSignOut() { setSignOutOpen(false); setIsLoggedIn(false); navigate("login"); addToast("You have been signed out.", "info"); }
+  async function handleSignOut() {
+  setSignOutOpen(false);
+  await signOut();
+  navigate("dashboard");
+  addToast("You have been signed out.", "info");
+  router.push("/");
+}
 
   const GLOBAL_CSS = `
     @keyframes blockDrop { from { opacity: 0; transform: translateY(-12px) scale(0.8); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -2786,18 +2793,23 @@ export default function App() {
     body { font-family: 'Inter', system-ui, sans-serif; }
   `;
 
-  if (loading) return (<><style>{GLOBAL_CSS}</style><LoadingScreen /></>);
-
-  if (!isLoggedIn) return (
+ if (loading || !isLoaded) {
+  return (
     <>
       <style>{GLOBAL_CSS}</style>
-      {page === "signup"
-        ? <SignupPage onBack={() => navigate("login")} onSignup={handleSignup} />
-        : <LoginPage onLogin={handleLogin} onSignup={() => navigate("signup")} />
-      }
+      <LoadingScreen />
+    </>
+  );
+}
+if (!isSignedIn) {
+  return (
+    <>
+      <style>{GLOBAL_CSS}</style>
+      <LoginPage />
       <ToastContainer toasts={toasts} remove={removeToast} />
     </>
   );
+}
 
   return (
     <>
