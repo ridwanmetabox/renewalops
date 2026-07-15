@@ -1,96 +1,144 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #09090b;
+  --metabox-blue: #1f3b73;
+  --metabox-blue-dark: #142b59;
+  --metabox-teal: #30b7ae;
+  --metabox-green: #54c7a5;
+  --metabox-light: #f8fbff;
+
+  --background: #f8fbff;
+  --foreground: #15233f;
 
   --card: #ffffff;
-  --card-foreground: #09090b;
+  --card-foreground: #15233f;
 
   --popover: #ffffff;
-  --popover-foreground: #09090b;
+  --popover-foreground: #15233f;
 
-  --primary: #18181b;
-  --primary-foreground: #fafafa;
+  --primary: #1f3b73;
+  --primary-foreground: #ffffff;
 
-  --secondary: #f4f4f5;
-  --secondary-foreground: #18181b;
+  --secondary: #e9f6ff;
+  --secondary-foreground: #1f3b73;
 
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
+  --muted: #eef5fa;
+  --muted-foreground: #64748b;
 
-  --accent: #f4f4f5;
-  --accent-foreground: #18181b;
+  --accent: #e6faf7;
+  --accent-foreground: #10645f;
 
   --destructive: #ef4444;
 
-  --border: #e4e4e7;
-  --input: #e4e4e7;
+  --border: #d8e7ef;
+  --input: #d8e7ef;
   --input-background: #ffffff;
-  --ring: #18181b;
+  --ring: #30b7ae;
 
   --sidebar: #ffffff;
-  --sidebar-foreground: #09090b;
+  --sidebar-foreground: #15233f;
 
-  --chart-1: #18181b;
-  --chart-2: #3f3f46;
-  --chart-3: #71717a;
-  --chart-4: #a1a1aa;
-  --chart-5: #d4d4d8;
+  --chart-1: #1f3b73;
+  --chart-2: #30b7ae;
+  --chart-3: #54c7a5;
+  --chart-4: #6aa6d8;
+  --chart-5: #94d2bd;
 
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 }
 
 .dark {
-  --background: #09090b;
-  --foreground: #fafafa;
+  --background: #071827;
+  --foreground: #f8fbff;
 
-  --card: #18181b;
-  --card-foreground: #fafafa;
+  --card: #0d2238;
+  --card-foreground: #f8fbff;
 
-  --popover: #18181b;
-  --popover-foreground: #fafafa;
+  --popover: #0d2238;
+  --popover-foreground: #f8fbff;
 
-  --primary: #fafafa;
-  --primary-foreground: #18181b;
+  --primary: #30b7ae;
+  --primary-foreground: #ffffff;
 
-  --secondary: #27272a;
-  --secondary-foreground: #fafafa;
+  --secondary: #102b46;
+  --secondary-foreground: #e9f6ff;
 
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
+  --muted: #102b46;
+  --muted-foreground: #a8c1d5;
 
-  --accent: #27272a;
-  --accent-foreground: #fafafa;
+  --accent: #123d43;
+  --accent-foreground: #b9fff7;
 
   --destructive: #ef4444;
 
-  --border: #27272a;
-  --input: #27272a;
-  --input-background: #18181b;
-  --ring: #d4d4d8;
+  --border: #1e3a56;
+  --input: #1e3a56;
+  --input-background: #0d2238;
+  --ring: #54c7a5;
 
-  --sidebar: #18181b;
-  --sidebar-foreground: #fafafa;
+  --sidebar: #0a1b2d;
+  --sidebar-foreground: #f8fbff;
 
-  --chart-1: #fafafa;
-  --chart-2: #d4d4d8;
-  --chart-3: #a1a1aa;
-  --chart-4: #71717a;
-  --chart-5: #3f3f46;
+  --chart-1: #30b7ae;
+  --chart-2: #54c7a5;
+  --chart-3: #6aa6d8;
+  --chart-4: #94d2bd;
+  --chart-5: #c9f7f2;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 @layer base {
   * {
     border-color: var(--border);
+  }
+
+  html {
+    background: var(--background);
   }
 
   body {
@@ -99,15 +147,134 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer utilities {
+  .metabox-gradient {
+    background: linear-gradient(135deg, #1f3b73 0%, #30b7ae 55%, #54c7a5 100%);
+  }
+
+  .metabox-text-gradient {
+    background: linear-gradient(135deg, #1f3b73 0%, #30b7ae 65%, #54c7a5 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .metabox-soft-bg {
+    background:
+      radial-gradient(circle at top left, rgba(48, 183, 174, 0.18), transparent 35%),
+      radial-gradient(circle at bottom right, rgba(31, 59, 115, 0.16), transparent 35%),
+      #f8fbff;
   }
 }
+/* Clerk Sign In / Sign Up MetaBox styling fixes */
+.cl-rootBox {
+  width: 100% !important;
+}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.cl-cardBox {
+  width: 100% !important;
+  max-width: 500px !important;
+  border-radius: 24px !important;
+  border: 1px solid #d8e7ef !important;
+  background: #ffffff !important;
+  box-shadow: 0 24px 70px rgba(31, 59, 115, 0.18) !important;
+}
+
+.cl-card {
+  background: #ffffff !important;
+  box-shadow: none !important;
+  padding: 32px !important;
+}
+
+.cl-headerTitle {
+  color: #15233f !important;
+  font-weight: 800 !important;
+}
+
+.cl-headerSubtitle {
+  color: #64748b !important;
+}
+
+.cl-socialButtonsBlockButton {
+  height: 46px !important;
+  border-radius: 14px !important;
+  border: 1px solid #d8e7ef !important;
+  background: #ffffff !important;
+  color: #15233f !important;
+}
+
+.cl-socialButtonsBlockButton:hover {
+  background: #e6faf7 !important;
+}
+
+.cl-socialButtonsBlockButtonText {
+  color: #15233f !important;
+  font-weight: 500 !important;
+}
+
+.cl-dividerText {
+  color: #64748b !important;
+}
+
+.cl-dividerLine {
+  background: #d8e7ef !important;
+}
+
+.cl-formFieldLabel {
+  color: #15233f !important;
+  font-weight: 600 !important;
+}
+
+.cl-formFieldInput {
+  height: 46px !important;
+  border-radius: 14px !important;
+  border: 1px solid #d8e7ef !important;
+  background: #ffffff !important;
+  color: #15233f !important;
+  box-shadow: none !important;
+}
+
+.cl-formFieldInput::placeholder {
+  color: #94a3b8 !important;
+}
+
+.cl-formFieldInput:focus {
+  border-color: #30b7ae !important;
+  box-shadow: 0 0 0 3px rgba(48, 183, 174, 0.18) !important;
+}
+
+.cl-formButtonPrimary {
+  height: 46px !important;
+  border-radius: 14px !important;
+  background: #30b7ae !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 10px 24px rgba(48, 183, 174, 0.25) !important;
+}
+
+.cl-formButtonPrimary:hover {
+  background: #269d96 !important;
+}
+
+.cl-footer {
+  background: #f8fbff !important;
+  border-top: 1px solid #e5eef5 !important;
+}
+
+.cl-footerActionText {
+  color: #64748b !important;
+}
+
+.cl-footerActionLink {
+  color: #30b7ae !important;
+  font-weight: 700 !important;
+}
+
+.cl-footerActionLink:hover {
+  color: #1f3b73 !important;
+}
+
+.cl-internal-1dauvpw,
+.cl-internal-1hp5nqm {
+  display: none !important;
 }

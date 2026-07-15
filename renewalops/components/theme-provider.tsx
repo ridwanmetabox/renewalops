@@ -11,10 +11,10 @@ export function ThemeProvider({
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="dark"
+      defaultTheme="light"
       enableSystem={false}
+      storageKey="renewalops-theme"
       disableTransitionOnChange
-      storageKey ="renewalops-theme"
     >
       {children}
     </NextThemesProvider>

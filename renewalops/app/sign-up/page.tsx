@@ -1,10 +1,10 @@
-import { SignIn } from "@clerk/nextjs";
+import { SignUp } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import LoginBrandPanel from "@/components/auth/LoginBrandPanel";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 
-export default async function HomePage() {
+export default async function SignUpPage() {
   const { userId } = await auth();
 
   if (userId) {
@@ -18,21 +18,23 @@ export default async function HomePage() {
       <section className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-[500px]">
           <div className="mb-8">
+            <p className="text-sm font-bold text-[#30B7AE] mb-2">
+              RenewalOps
+            </p>
 
             <h1 className="text-4xl font-black text-[#15233F] mb-3">
-              Welcome back
+              Create your account
             </h1>
 
             <p className="text-base text-slate-600">
-              Sign in to your account to continue
+              Sign up to start managing renewals
             </p>
           </div>
 
-          <SignIn
+          <SignUp
             routing="hash"
-            signUpUrl="/sign-up"
+            signInUrl="/"
             forceRedirectUrl="/dashboard"
-            signUpForceRedirectUrl="/dashboard"
             appearance={clerkAppearance}
           />
         </div>
