@@ -1115,11 +1115,19 @@ function ClientsPage({ clients, setClients, onDetail, toast }: {
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
   const [newClient, setNewClient] = useState({ company: "", contact: "", email: "", phone: "", status: "Active" as Status, billingAddress: "" });
 
-  const filtered = clients.filter(c =>
-    c.company.toLowerCase().includes(filter.toLowerCase()) ||
-    c.contact.toLowerCase().includes(filter.toLowerCase()) ||
-    c.email.toLowerCase().includes(filter.toLowerCase())
-  );
+const filterText = filter.toLowerCase();
+
+const filtered = clients.filter((c) =>
+  String(c.company ?? c.companyName ?? "")
+    .toLowerCase()
+    .includes(filterText) ||
+  String(c.contact ?? c.contacts?.[0]?.name ?? "")
+    .toLowerCase()
+    .includes(filterText) ||
+  String(c.email ?? c.contacts?.[0]?.email ?? "")
+    .toLowerCase()
+    .includes(filterText)
+);
 
 async function handleAdd() {
   if (!newClient.company || !newClient.contact || !newClient.email) {
@@ -3179,32 +3187,75 @@ export default function App() {
 
   const unreadCount = notifications.filter(n => !n.read && !n.archived).length;
 
-  useEffect(() => {
+useEffect(() => {
   async function loadDatabaseData() {
     try {
-      const [clientsResponse, contactsResponse, contractsResponse] = await Promise.all([
-        fetch("/api/clients", { headers: { Accept: "application/json" }, cache: "no-store" }),
-        fetch("/api/contacts", { headers: { Accept: "application/json" }, cache: "no-store" }),
-        fetch("/api/contracts", { headers: { Accept: "application/json" }, cache: "no-store" }),
-      ]);
+      const clientsResponse = await fetch("/api/clients", {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
 
       const clientsData = await readApiJson(clientsResponse, "/api/clients");
-      const contactsData = await readApiJson(contactsResponse, "/api/contacts");
-      const contractsData = await readApiJson(contractsResponse, "/api/contracts");
 
-      if (clientsData.success) {
-        setClients(clientsData.clients);
-      }
+      const rawClients = Array.isArray(clientsData)
+        ? clientsData
+        : Array.isArray(clientsData?.clients)
+          ? clientsData.clients
+          : [];
 
-      if (contactsData.success) {
-        setContacts(contactsData.contacts);
-      }
+      const formattedClients = rawClients.map((client) => ({
+        ...client,
+        company: client.company ?? client.companyName ?? "Unnamed Client",
+        contact: client.contact ?? client.contacts?.[0]?.name ?? "No contact",
+        email: client.email ?? client.contacts?.[0]?.email ?? "",
+        phone: client.phone ?? client.contacts?.[0]?.phone ?? "",
+        contracts: client.contracts ?? [],
+      }));
 
-      if (contractsData.success) {
-        setContracts(contractsData.contracts);
-      }
+      setClients(formattedClients);
     } catch (error) {
-      console.error("Load database data error:", error);
+      console.error("Failed to load clients:", error);
+    }
+
+    try {
+      const contactsResponse = await fetch("/api/contacts", {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+
+      const contactsData = await readApiJson(contactsResponse, "/api/contacts");
+
+      const rawContacts = Array.isArray(contactsData)
+        ? contactsData
+        : Array.isArray(contactsData?.contacts)
+          ? contactsData.contacts
+          : [];
+
+      setContacts(rawContacts);
+    } catch (error) {
+      console.error("Failed to load contacts:", error);
+    }
+
+    try {
+      const contractsResponse = await fetch("/api/contracts", {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+
+      const contractsData = await readApiJson(
+        contractsResponse,
+        "/api/contracts",
+      );
+
+      const rawContracts = Array.isArray(contractsData)
+        ? contractsData
+        : Array.isArray(contractsData?.contracts)
+          ? contractsData.contracts
+          : [];
+
+      setContracts(rawContracts);
+    } catch (error) {
+      console.error("Failed to load contracts:", error);
     }
   }
 
