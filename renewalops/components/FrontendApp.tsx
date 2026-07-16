@@ -155,6 +155,22 @@ function fmtCurrency(amount: number, currency: string): string {
   return `${symbols[currency] || currency} ${amount.toLocaleString()}`;
 }
 
+
+async function readApiJson(response: Response, apiName: string) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+    const preview = text.replace(/\s+/g, " ").slice(0, 160);
+
+    throw new Error(
+      `${apiName} did not return JSON. Status: ${response.status}. Check that this API route exists and is not returning an HTML error page. Preview: ${preview}`
+    );
+  }
+
+  return response.json();
+}
+
 function statusColor(status: Status): string {
   const map: Record<Status, string> = {
     Active: "bg-zinc-900 text-white",
@@ -646,14 +662,36 @@ function TopBar({
 
 // ─── SEARCH OVERLAY ───────────────────────────────────────────────────────────
 
-function SearchOverlay({ query, clients, contracts, onClose, onNav }: {
-  query: string; clients: Client[]; contracts: Contract[]; onClose: () => void; onNav: (p: Page) => void;
+function SearchOverlay({ query, clients, contacts, contracts, onClose, onNav }: {
+  query: string;
+  clients: Client[];
+  contacts: Contact[];
+  contracts: Contract[];
+  onClose: () => void;
+  onNav: (p: Page) => void;
 }) {
   const q = query.toLowerCase();
-  const clientRes = clients.filter(c => c.company.toLowerCase().includes(q) || c.contact.toLowerCase().includes(q));
-  const contactRes = INIT_CONTACTS.filter(c => c.name.toLowerCase().includes(q) || c.company.toLowerCase().includes(q));
-  const contractRes = contracts.filter(c => c.name.toLowerCase().includes(q) || c.client.toLowerCase().includes(q) || c.reference.toLowerCase().includes(q));
+
+  const clientRes = clients.filter(c =>
+    c.company.toLowerCase().includes(q) ||
+    c.contact.toLowerCase().includes(q) ||
+    c.email.toLowerCase().includes(q)
+  );
+
+  const contactRes = contacts.filter(c =>
+    c.name.toLowerCase().includes(q) ||
+    c.company.toLowerCase().includes(q) ||
+    c.email.toLowerCase().includes(q)
+  );
+
+  const contractRes = contracts.filter(c =>
+    c.name.toLowerCase().includes(q) ||
+    c.client.toLowerCase().includes(q) ||
+    c.reference.toLowerCase().includes(q)
+  );
+
   if (!query) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4" onClick={onClose}>
       <div className="bg-popover border border-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -672,6 +710,7 @@ function SearchOverlay({ query, clients, contracts, onClose, onNav }: {
                 </button>
               ))}
             </>}
+
             {contactRes.length > 0 && <>
               <p className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-widest">Contacts</p>
               {contactRes.map(c => (
@@ -683,6 +722,7 @@ function SearchOverlay({ query, clients, contracts, onClose, onNav }: {
                 </button>
               ))}
             </>}
+
             {contractRes.length > 0 && <>
               <p className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-widest">Contracts</p>
               {contractRes.map(c => (
@@ -700,6 +740,7 @@ function SearchOverlay({ query, clients, contracts, onClose, onNav }: {
     </div>
   );
 }
+
 
 // ─── SIGN OUT MODAL ───────────────────────────────────────────────────────────
 
@@ -724,11 +765,78 @@ function SignOutModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
+const STATUS_CHART_COLORS: Record<string, string> = {
+  Active: "#54C7A5",
+  "On Track": "#30B7AE",
+  "Due Soon": "#6AA6D8",
+  Overdue: "#EF4444",
+  Cancelled: "#94A3B8",
+  Renewed: "#22C55E",
+  "On Hold": "#F59E0B",
+  Pending: "#A3A3A3",
+};
+
+function buildStatusChart(contracts: Contract[]) {
+  const statuses: Status[] = [
+    "Active",
+    "On Track",
+    "Due Soon",
+    "Overdue",
+    "Cancelled",
+    "Renewed",
+    "On Hold",
+    "Pending",
+  ];
+
+  return statuses
+    .map((status) => {
+      const count = contracts.filter((contract) => contract.status === status).length;
+
+      return {
+        name: status,
+        count,
+        color: STATUS_CHART_COLORS[status] ?? "#94A3B8",
+      };
+    })
+    .filter((item) => item.count > 0);
+}
+
+function buildMonthlyRenewals(contracts: Contract[]) {
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  const currentYear = new Date().getFullYear();
+
+  return monthLabels.map((month, index) => {
+    const count = contracts.filter((contract) => {
+      if (!contract.renewalDate || contract.renewalDate === "—") return false;
+
+      const date = new Date(contract.renewalDate);
+
+      return date.getFullYear() === currentYear && date.getMonth() === index;
+    }).length;
+
+    return {
+      month,
+      count,
+    };
+  });
+}
 
 function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contracts: Contract[]; onNav: (p: Page) => void }) {
   const dueCount = contracts.filter(c => c.daysLeft >= 0 && c.daysLeft <= 30 && c.status !== "Cancelled" && c.status !== "Renewed").length;
   const overdueCount = contracts.filter(c => c.daysLeft < 0 && c.status !== "Cancelled" && c.status !== "Renewed").length;
   const byType = CONTRACT_TYPES.map(t => ({ type: t, count: contracts.filter(c => c.contractType === t).length }));
+
+  const statusChartData = buildStatusChart(contracts);
+  const statusChartTotal = contracts.length;
+
+  const monthlyRenewals = buildMonthlyRenewals(contracts);
+  const maxMonthlyRenewals = Math.max(1, ...monthlyRenewals.map((item) => item.count));
+
+  const upcomingContracts = contracts
+    .filter(c => c.status !== "Cancelled")
+    .sort((a, b) => new Date(a.renewalDate).getTime() - new Date(b.renewalDate).getTime())
+    .slice(0, 6);
 
   return (
     <div className="space-y-6">
@@ -736,6 +844,7 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground text-sm mt-1">Overview of your renewal pipeline — Mauritius</p>
       </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Total Clients", value: clients.length, sub: "registered companies" },
@@ -750,100 +859,142 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
           </div>
         ))}
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Custom bar chart — no Recharts, no ID collisions */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5">
-          <h2 className="font-semibold text-sm mb-4">Monthly Renewals</h2>
-          {(() => {
-            const max = Math.max(...BAR_DATA.map(b => b.renewals));
-            const chartH = 160;
-            const yLabels = [max, Math.round(max * 0.75), Math.round(max * 0.5), Math.round(max * 0.25), 0];
-            return (
-              <div className="flex gap-2">
-                {/* Y-axis */}
-                <div className="flex flex-col justify-between text-right pb-6" style={{ height: chartH + 24 }}>
-                  {yLabels.map(v => (
-                    <span key={v} className="text-[9px] text-muted-foreground/70 leading-none">{v}</span>
-                  ))}
+        <div className="bg-card border border-border rounded-xl p-5 lg:col-span-2">
+          <h2 className="font-semibold mb-4">Monthly Renewals</h2>
+
+          {contracts.length === 0 ? (
+            <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground border border-dashed border-border rounded-xl">
+              No contract renewal data yet
+            </div>
+          ) : (
+            <div className="h-[220px] flex items-end gap-4 border-b border-border px-2">
+              {monthlyRenewals.map((item) => (
+                <div key={item.month} className="flex-1 flex flex-col items-center gap-2">
+                  <div
+                    className={cn(
+                      "w-full max-w-[90px] rounded-t-lg transition-all",
+                      item.count > 0 ? "bg-primary" : "bg-muted"
+                    )}
+                    style={{
+                      height: item.count > 0
+                        ? `${Math.max(8, (item.count / maxMonthlyRenewals) * 180)}px`
+                        : "4px",
+                    }}
+                    title={`${item.count} renewal${item.count !== 1 ? "s" : ""}`}
+                  />
+
+                  <span className="text-xs text-muted-foreground">{item.month}</span>
                 </div>
-                {/* Chart area */}
-                <div className="flex-1 flex flex-col">
-                  <div className="relative flex-1" style={{ height: chartH }}>
-                    {/* Grid lines */}
-                    {[0, 25, 50, 75, 100].map(pct => (
-                      <div key={pct} className="absolute left-0 right-0 border-t border-border/40"
-                        style={{ bottom: `${pct}%` }} />
-                    ))}
-                    {/* Bars */}
-                    <div className="absolute inset-0 flex items-end gap-1.5 px-1">
-                      {BAR_DATA.map(d => {
-                        const pct = (d.renewals / max) * 100;
-                        const barPx = Math.round((pct / 100) * 160);
-                        return (
-                          <div key={d.month} className="flex-1 flex flex-col items-center gap-0 group relative">
-                            <div className="absolute text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity" style={{ bottom: barPx + 4, color: "var(--chart-1)" }}>{d.renewals}</div>
-                            <div className="w-full rounded-t-sm"
-                              style={{ height: barPx, background: "var(--foreground)" }} />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  {/* X-axis labels */}
-                  <div className="flex gap-1.5 px-1 mt-1.5">
-                    {BAR_DATA.map(d => (
-                      <div key={d.month} className="flex-1 text-center text-[11px] text-muted-foreground">{d.month}</div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Custom donut chart — pure SVG */}
         <div className="bg-card border border-border rounded-xl p-5">
-          <h2 className="font-semibold text-sm mb-4">Renewals by Status</h2>
-          <div className="flex justify-center mb-3">
-            {(() => {
-              const total = PIE_DATA.reduce((s, d) => s + d.value, 0);
-              const r = 54, cx = 70, cy = 70, sw = 20;
-              const circ = 2 * Math.PI * r;
-              let cum = 0;
-              return (
-                <svg width="140" height="140" viewBox="0 0 140 140">
-                  {PIE_DATA.map(d => {
-                    const pct = d.value / total;
-                    const dash = pct * circ;
-                    const offset = -(cum * circ);
-                    cum += pct;
-                    return (
-                      <circle key={d.name} cx={cx} cy={cy} r={r}
-                        fill="none" strokeWidth={sw}
-                        strokeDasharray={`${dash} ${circ}`}
-                        strokeDashoffset={offset}
-                        transform={`rotate(-90 ${cx} ${cy})`}
-                        style={{ stroke: d.color }}
-                      />
-                    );
-                  })}
-                  <text x={cx} y={cy - 4} textAnchor="middle" fontSize="18" fontWeight="700" fill="var(--foreground)">{total}</text>
-                  <text x={cx} y={cy + 12} textAnchor="middle" fontSize="9" fill="var(--muted-foreground)">contracts</text>
-                </svg>
-              );
-            })()}
-          </div>
-          <div className="grid grid-cols-2 gap-y-1.5 gap-x-2">
-            {PIE_DATA.map(d => (
-              <div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                <span>{d.name}</span>
-                <span className="ml-auto font-mono text-foreground">{d.value}%</span>
+          <h2 className="font-semibold mb-4">Renewals by Status</h2>
+
+          {statusChartTotal === 0 ? (
+            <div className="h-[220px] flex flex-col items-center justify-center text-center">
+              <div className="w-[140px] h-[140px] rounded-full border-[20px] border-muted flex items-center justify-center mb-4">
+                <div>
+                  <p className="text-xl font-bold">0</p>
+                  <p className="text-[10px] text-muted-foreground">contracts</p>
+                </div>
               </div>
-            ))}
-          </div>
+
+              <p className="text-sm text-muted-foreground">No renewal status data yet</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-center mb-5">
+                {(() => {
+                  const r = 54;
+                  const cx = 70;
+                  const cy = 70;
+                  const sw = 20;
+                  const circ = 2 * Math.PI * r;
+                  let cum = 0;
+
+                  return (
+                    <svg width="140" height="140" viewBox="0 0 140 140">
+                      {statusChartData.map((item) => {
+                        const pct = item.count / statusChartTotal;
+                        const dash = pct * circ;
+                        const offset = -(cum * circ);
+
+                        cum += pct;
+
+                        return (
+                          <circle
+                            key={item.name}
+                            cx={cx}
+                            cy={cy}
+                            r={r}
+                            fill="none"
+                            strokeWidth={sw}
+                            strokeDasharray={`${dash} ${circ}`}
+                            strokeDashoffset={offset}
+                            transform={`rotate(-90 ${cx} ${cy})`}
+                            style={{ stroke: item.color }}
+                          />
+                        );
+                      })}
+
+                      <text
+                        x={cx}
+                        y={cy - 4}
+                        textAnchor="middle"
+                        fontSize="18"
+                        fontWeight="700"
+                        fill="var(--foreground)"
+                      >
+                        {statusChartTotal}
+                      </text>
+
+                      <text
+                        x={cx}
+                        y={cy + 12}
+                        textAnchor="middle"
+                        fontSize="9"
+                        fill="var(--muted-foreground)"
+                      >
+                        contracts
+                      </text>
+                    </svg>
+                  );
+                })()}
+              </div>
+
+              <div className="grid grid-cols-2 gap-y-1.5 gap-x-2">
+                {statusChartData.map((item) => {
+                  const percentage = Math.round((item.count / statusChartTotal) * 100);
+
+                  return (
+                    <div
+                      key={item.name}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ background: item.color }}
+                      />
+
+                      <span>{item.name}</span>
+
+                      <span className="ml-auto font-mono text-foreground">
+                        {percentage}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
+
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="font-semibold">Upcoming Renewals</h2>
@@ -861,7 +1012,7 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {contracts.filter(c => c.status !== "Cancelled").slice(0, 6).map(c => (
+              {upcomingContracts.map(c => (
                 <tr key={c.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-5 py-3.5 font-medium">{c.client}</td>
                   <td className="px-5 py-3.5 text-muted-foreground text-xs">{c.name}</td>
@@ -872,14 +1023,23 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
                     </span>
                   </td>
                   <td className="px-5 py-3.5"><StatusBadge status={c.status} /></td>
-                  <td className="px-5 py-3.5 text-muted-foreground">{c.assignedTo}</td>
+                  <td className="px-5 py-3.5 text-muted-foreground">{c.assignedTo || "—"}</td>
                   <td className="px-5 py-3.5 font-mono text-xs">{fmtCurrency(c.amount, c.currency)}</td>
                 </tr>
               ))}
+
+              {upcomingContracts.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                    No upcoming renewals yet
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="bg-card border border-border rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
@@ -894,12 +1054,16 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
                   <span className="text-muted-foreground">{ct.count}</span>
                 </div>
                 <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-foreground" style={{ width: `${Math.max(5, (ct.count / contracts.length) * 100)}%` }} />
+                  <div
+                    className="h-full rounded-full bg-foreground"
+                    style={{ width: contracts.length > 0 ? `${Math.max(5, (ct.count / contracts.length) * 100)}%` : "0%" }}
+                  />
                 </div>
               </div>
             ))}
           </div>
         </div>
+
         <div className="bg-card border border-border rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-sm">Due Renewals</h2>
@@ -911,10 +1075,12 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
               <span className="text-muted-foreground font-mono ml-2 shrink-0">{c.daysLeft}d</span>
             </div>
           ))}
+          {dueCount === 0 && <p className="text-xs text-muted-foreground">No renewals due soon</p>}
           <button onClick={() => onNav("contracts")} className="mt-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">
             View all <ArrowRight className="w-3 h-3" />
           </button>
         </div>
+
         <div className="bg-card border border-red-400/30 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-red-500" /> Overdue</h2>
@@ -936,6 +1102,7 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
   );
 }
 
+
 // ─── CLIENTS PAGE ─────────────────────────────────────────────────────────────
 
 function ClientsPage({ clients, setClients, onDetail, toast }: {
@@ -954,14 +1121,56 @@ function ClientsPage({ clients, setClients, onDetail, toast }: {
     c.email.toLowerCase().includes(filter.toLowerCase())
   );
 
-  function handleAdd() {
-    if (!newClient.company || !newClient.contact || !newClient.email) { toast("Please fill in required fields.", "error"); return; }
-    const c: Client = { ...newClient, id: `c${Date.now()}`, totalOutstanding: 0, overdueAmount: 0, nextRenewal: "—", contracts: 0, joinDate: new Date().toISOString().split("T")[0] };
-    setClients([c, ...clients]);
-    setAddOpen(false);
-    setNewClient({ company: "", contact: "", email: "", phone: "", status: "Active", billingAddress: "" });
-    toast("Client added successfully.");
+async function handleAdd() {
+  if (!newClient.company || !newClient.contact || !newClient.email) {
+    toast("Please fill in required fields.", "error");
+    return;
   }
+
+  try {
+    const response = await fetch("/api/clients", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        company: newClient.company,
+        contact: newClient.contact,
+        email: newClient.email,
+        phone: newClient.phone,
+        status: newClient.status,
+        billingAddress: newClient.billingAddress,
+      }),
+    });
+
+    const data = await readApiJson(response, "/api/clients");
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Failed to create client.");
+    }
+
+    setClients([data.client as Client, ...clients]);
+    setAddOpen(false);
+
+    setNewClient({
+      company: "",
+      contact: "",
+      email: "",
+      phone: "",
+      status: "Active",
+      billingAddress: "",
+    });
+
+    toast("Client added successfully.");
+  } catch (error) {
+    console.error("Create client frontend error:", error);
+
+    toast(
+      error instanceof Error ? error.message : "Failed to create client.",
+      "error"
+    );
+  }
+}
 
   function handleEdit(updated: Client) {
     setClients(clients.map(c => c.id === updated.id ? updated : c));
@@ -1033,13 +1242,13 @@ function ClientsPage({ clients, setClients, onDetail, toast }: {
       </div>
 
       {addOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-background/80 backdrop-blur-sm px-6 py-16">
+          <div className="mx-auto bg-card border border-border rounded-xl p-6 w-full max-w-3xl shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-bold text-lg">Add New Client</h2>
               <button onClick={() => setAddOpen(false)} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
             </div>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
                 { label: "Company name *", key: "company", placeholder: "ABC Company Ltd" },
                 { label: "Main contact *", key: "contact", placeholder: "John Doe" },
@@ -1061,7 +1270,7 @@ function ClientsPage({ clients, setClients, onDetail, toast }: {
                 </select>
               </div>
             </div>
-            <div className="flex gap-2 mt-5">
+            <div className="flex gap-2 mt-5 md:col-span-2">
               <button onClick={() => setAddOpen(false)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
               <button onClick={handleAdd} className="flex-1 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Save Client</button>
             </div>
@@ -1124,8 +1333,8 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
 
 // ─── CLIENT DETAIL ────────────────────────────────────────────────────────────
 
-function ClientDetailPage({ client: initClient, clients, setClients, onBack, onNav, toast }: {
-  client: Client; clients: Client[]; setClients: (c: Client[]) => void;
+function ClientDetailPage({ client: initClient, clients, contacts, setClients, onBack, onNav, toast }: {
+  client: Client; clients: Client[]; contacts: Contact[]; setClients: (c: Client[]) => void;
   onBack: () => void; onNav: (p: Page) => void; toast: (msg: string, type?: Toast["type"]) => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -1196,7 +1405,7 @@ function ClientDetailPage({ client: initClient, clients, setClients, onBack, onN
           </div>
           <div className="bg-card border border-border rounded-xl p-5">
             <h2 className="font-semibold text-sm mb-3">Primary Contacts</h2>
-            {INIT_CONTACTS.filter(c => c.company === client.company).map(c => (
+            {contacts.filter(c => c.company === client.company).map(c => (
               <div key={c.id} className="mb-3">
                 <p className="font-medium text-sm">{c.name}</p>
                 <p className="text-xs text-muted-foreground">{c.role}</p>
@@ -1237,15 +1446,16 @@ const BLANK_CONTACT: Omit<Contact, "id"> = {
 };
 
 function ContactsPage({
-  onDetail, clients, contracts, setContracts, toast
+  contacts, setContacts, onDetail, clients, contracts, setContracts, toast
 }: {
+  contacts: Contact[];
+  setContacts: (c: Contact[]) => void;
   onDetail: (c: Contact) => void;
   clients: Client[];
   contracts: Contract[];
   setContracts: (c: Contract[]) => void;
   toast: (msg: string, type?: Toast["type"]) => void;
 }) {
-  const [contacts, setContacts] = useState(INIT_CONTACTS);
   const [filter, setFilter] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const [addContactOpen, setAddContactOpen] = useState(false);
@@ -1258,15 +1468,79 @@ function ContactsPage({
     c.email.toLowerCase().includes(filter.toLowerCase())
   );
 
-  function saveContact() {
+  async function saveContact() {
     if (!contactForm.name.trim() || !contactForm.email.trim()) {
-      toast("Name and email are required.", "error"); return;
+      toast("Name and email are required.", "error");
+      return;
     }
-    const newContact: Contact = { ...contactForm, id: `c-${Date.now()}`, lastContact: new Date().toISOString().split("T")[0] };
-    setContacts(prev => [newContact, ...prev]);
-    setAddContactOpen(false);
-    setContactForm(BLANK_CONTACT);
-    toast("Contact added successfully.");
+
+    try {
+      const response = await fetch("/api/contacts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...contactForm,
+          lastContact: contactForm.lastContact || new Date().toISOString().split("T")[0],
+        }),
+      });
+
+      const data = await readApiJson(response, "/api/contacts");
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to create contact.");
+      }
+
+      setContacts([data.contact as Contact, ...contacts]);
+      setAddContactOpen(false);
+      setContactForm(BLANK_CONTACT);
+
+      toast("Contact added successfully.");
+    } catch (error) {
+      console.error("Create contact frontend error:", error);
+
+      toast(
+        error instanceof Error ? error.message : "Failed to create contact.",
+        "error"
+      );
+    }
+  }
+
+  async function saveContractFromContacts(c: Contract) {
+    try {
+      const response = await fetch("/api/contracts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(c),
+      });
+
+      const data = await readApiJson(response, "/api/contracts");
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to create contract.");
+      }
+
+      setContracts([data.contract as Contract, ...contracts]);
+      setAddContractOpen(false);
+
+      toast("Contract added successfully.");
+    } catch (error) {
+      console.error("Create contract from contacts error:", error);
+
+      toast(
+        error instanceof Error ? error.message : "Failed to create contract.",
+        "error"
+      );
+    }
+  }
+
+  function removeContactFromScreen(id: string) {
+    setContacts(contacts.filter(c => c.id !== id));
+    setDeleteTarget(null);
+    toast("Contact removed from the screen. Database delete can be connected next.", "info");
   }
 
   return (
@@ -1283,11 +1557,13 @@ function ContactsPage({
           </button>
         </div>
       </div>
+
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter contacts…"
           className="w-full pl-9 pr-4 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
       </div>
+
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
           <table className="w-full text-sm">
@@ -1322,36 +1598,42 @@ function ContactsPage({
                   </td>
                 </tr>
               ))}
+
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                    No contacts found
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         <div className="px-5 py-3 border-t border-border text-xs text-muted-foreground">{filtered.length} contacts</div>
       </div>
 
-      {/* Delete confirmation */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl">
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-background/80 backdrop-blur-sm px-6 py-16">
+          <div className="mx-auto bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl">
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
             <h2 className="font-bold text-lg mb-1">Delete contact?</h2>
             <p className="text-sm text-muted-foreground mb-5">Remove <strong>{deleteTarget.name}</strong> from contacts?</p>
             <div className="flex gap-2">
               <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
-              <button onClick={() => { setContacts(prev => prev.filter(c => c.id !== deleteTarget.id)); setDeleteTarget(null); toast("Contact deleted.", "info"); }} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
+              <button onClick={() => removeContactFromScreen(deleteTarget.id)} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add Contact modal */}
       {addContactOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-background/80 backdrop-blur-sm px-6 py-16">
+          <div className="mx-auto bg-card border border-border rounded-xl p-6 w-full max-w-3xl shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-bold text-lg">Add Contact</h2>
               <button onClick={() => { setAddContactOpen(false); setContactForm(BLANK_CONTACT); }} className="p-1.5 rounded hover:bg-accent text-muted-foreground"><X className="w-4 h-4" /></button>
             </div>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
                 { label: "Full Name *", key: "name", placeholder: "Jean-Pierre Labelle" },
                 { label: "Company", key: "company", placeholder: "Rogers Company Ltd" },
@@ -1376,14 +1658,14 @@ function ContactsPage({
                   {["Active", "Pending", "On Hold"].map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
-              <div>
+              <div className="md:col-span-2">
                 <label className="text-sm font-medium block mb-1">Notes</label>
                 <textarea value={contactForm.notes} onChange={e => setContactForm(p => ({ ...p, notes: e.target.value }))}
                   rows={3} placeholder="Any relevant notes about this contact…"
                   className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring resize-none" />
               </div>
             </div>
-            <div className="flex gap-2 mt-5">
+            <div className="flex gap-2 mt-5 md:col-span-2">
               <button onClick={() => { setAddContactOpen(false); setContactForm(BLANK_CONTACT); }} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
               <button onClick={saveContact} className="flex-1 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Add Contact</button>
             </div>
@@ -1391,17 +1673,18 @@ function ContactsPage({
         </div>
       )}
 
-      {/* Add Contract wizard from contacts page */}
       {addContractOpen && (
         <AddContractWizard
           clients={clients}
-          onSave={c => { setContracts([...contracts, c]); toast("Contract added successfully."); setAddContractOpen(false); }}
+          contacts={contacts}
+          onSave={saveContractFromContacts}
           onClose={() => setAddContractOpen(false)}
         />
       )}
     </div>
   );
 }
+
 
 // ─── CONTACT DETAIL ───────────────────────────────────────────────────────────
 
@@ -1534,7 +1817,7 @@ interface WizardForm {
   reminderDays: number[]; recipientTypes: string[];
 }
 
-function AddContractWizard({ clients, onSave, onClose }: { clients: Client[]; onSave: (c: Contract) => void; onClose: () => void }) {
+function AddContractWizard({ clients, contacts = [], onSave, onClose }: { clients: Client[]; contacts?: Contact[]; onSave: (c: Contract) => void; onClose: () => void }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<WizardForm>({
     clientId: "", client: "", name: "", reference: "", serviceDescription: "",
@@ -1571,8 +1854,8 @@ function AddContractWizard({ clients, onSave, onClose }: { clients: Client[]; on
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-background/80 backdrop-blur-sm px-6 py-8">
+      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[calc(100vh-4rem)] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
           <h2 className="font-bold text-lg">Add Contract</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
@@ -1590,7 +1873,7 @@ function AddContractWizard({ clients, onSave, onClose }: { clients: Client[]; on
           ))}
         </div>
 
-        <div className="px-6 pb-6 space-y-4">
+        <div className="px-6 pb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           {step === 1 && (
             <>
               <div>
@@ -1648,7 +1931,7 @@ function AddContractWizard({ clients, onSave, onClose }: { clients: Client[]; on
                   <select value={form.assignedTo} onChange={e => setForm(f => ({ ...f, assignedTo: e.target.value }))}
                     className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
                     <option value="">— Select a contact —</option>
-                    {INIT_CONTACTS.map(c => <option key={c.id} value={c.name}>{c.name} · {c.company}</option>)}
+                    {contacts.map(c => <option key={c.id} value={c.name}>{c.name} · {c.company}</option>)}
                   </select>
                 </div>
               </div>
@@ -1722,7 +2005,7 @@ function AddContractWizard({ clients, onSave, onClose }: { clients: Client[]; on
           )}
 
           {step === 4 && (
-            <div className="bg-muted/50 rounded-xl p-4 space-y-3 text-sm">
+            <div className="bg-muted/50 rounded-xl p-4 space-y-3 text-sm md:col-span-2">
               <h3 className="font-semibold">Review</h3>
               <div className="grid grid-cols-2 gap-y-2">
                 <span className="text-muted-foreground">Client</span><span className="font-medium text-right">{form.client || "—"}</span>
@@ -1818,8 +2101,8 @@ function RenewalCalendar({ contracts }: { contracts: Contract[] }) {
 
 // ─── CONTRACTS PAGE ───────────────────────────────────────────────────────────
 
-function ContractsPage({ contracts, clients, setContracts, onDetail, toast }: {
-  contracts: Contract[]; clients: Client[]; setContracts: (c: Contract[]) => void;
+function ContractsPage({ contracts, clients, contacts, setContracts, onDetail, toast }: {
+  contracts: Contract[]; clients: Client[]; contacts: Contact[]; setContracts: (c: Contract[]) => void;
   onDetail: (c: Contract) => void; toast: (msg: string, type?: Toast["type"]) => void;
 }) {
   const [tab, setTab] = useState<"list" | "calendar">("list");
@@ -1845,11 +2128,35 @@ function ContractsPage({ contracts, clients, setContracts, onDetail, toast }: {
     return true;
   });
 
-  function handleAdd(c: Contract) {
-    setContracts([c, ...contracts]);
+async function handleAdd(c: Contract) {
+  try {
+    const response = await fetch("/api/contracts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(c),
+    });
+
+    const data = await readApiJson(response, "/api/contracts");
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Failed to create contract.");
+    }
+
+    setContracts([data.contract as Contract, ...contracts]);
     setAddOpen(false);
+
     toast("Contract created successfully.");
+  } catch (error) {
+    console.error("Create contract frontend error:", error);
+
+    toast(
+      error instanceof Error ? error.message : "Failed to create contract.",
+      "error"
+    );
   }
+}
 
   function handleDelete(id: string) {
     setContracts(contracts.filter(c => c.id !== id));
@@ -1969,15 +2276,15 @@ function ContractsPage({ contracts, clients, setContracts, onDetail, toast }: {
         </>
       )}
 
-      {addOpen && <AddContractWizard clients={clients} onSave={handleAdd} onClose={() => setAddOpen(false)} />}
+      {addOpen && <AddContractWizard clients={clients} contacts={contacts} onSave={handleAdd} onClose={() => setAddOpen(false)} />}
     </div>
   );
 }
 
 // ─── CONTRACT DETAIL ──────────────────────────────────────────────────────────
 
-function ContractDetailPage({ contract: initContract, contracts, setContracts, onBack, toast }: {
-  contract: Contract; contracts: Contract[]; setContracts: (c: Contract[]) => void;
+function ContractDetailPage({ contract: initContract, contracts, contacts, setContracts, onBack, toast }: {
+  contract: Contract; contracts: Contract[]; contacts: Contact[]; setContracts: (c: Contract[]) => void;
   onBack: () => void; toast: (msg: string, type?: Toast["type"]) => void;
 }) {
   const contract = contracts.find(c => c.id === initContract.id) || initContract;
@@ -2028,7 +2335,7 @@ function ContractDetailPage({ contract: initContract, contracts, setContracts, o
     toast("Contract deleted.", "info");
   }
 
-  const clientContact = INIT_CONTACTS.find(c => c.company === contract.client);
+  const clientContact = contacts.find(c => c.company === contract.client);
 
   return (
     <div className="space-y-6">
@@ -2850,8 +3157,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState<Page>("dashboard");
 
-  const [clients, setClients] = useState<Client[]>(INIT_CLIENTS);
-  const [contracts, setContracts] = useState<Contract[]>(INIT_CONTRACTS);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>(INIT_NOTIFICATIONS);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -2871,6 +3179,37 @@ export default function App() {
 
   const unreadCount = notifications.filter(n => !n.read && !n.archived).length;
 
+  useEffect(() => {
+  async function loadDatabaseData() {
+    try {
+      const [clientsResponse, contactsResponse, contractsResponse] = await Promise.all([
+        fetch("/api/clients", { headers: { Accept: "application/json" }, cache: "no-store" }),
+        fetch("/api/contacts", { headers: { Accept: "application/json" }, cache: "no-store" }),
+        fetch("/api/contracts", { headers: { Accept: "application/json" }, cache: "no-store" }),
+      ]);
+
+      const clientsData = await readApiJson(clientsResponse, "/api/clients");
+      const contactsData = await readApiJson(contactsResponse, "/api/contacts");
+      const contractsData = await readApiJson(contractsResponse, "/api/contracts");
+
+      if (clientsData.success) {
+        setClients(clientsData.clients);
+      }
+
+      if (contactsData.success) {
+        setContacts(contactsData.contacts);
+      }
+
+      if (contractsData.success) {
+        setContracts(contractsData.contracts);
+      }
+    } catch (error) {
+      console.error("Load database data error:", error);
+    }
+  }
+
+  loadDatabaseData();
+}, []);
   useEffect(() => { const t = setTimeout(() => setLoading(false), 2400); return () => clearTimeout(t); }, []);
   useEffect(() => { if (!searchQuery) setSearchOpen(false); else setSearchOpen(true); }, [searchQuery]);
 
@@ -2986,25 +3325,49 @@ if (!isSignedIn) {
                     onDetail={c => { setSelectedClient(c); navigate("client-detail"); }} toast={addToast} />
                 )}
                 {page === "client-detail" && selectedClient && (
-                  <ClientDetailPage client={selectedClient} clients={clients} setClients={setClients}
-                    onBack={() => navigate("clients")} onNav={handleNav} toast={addToast} />
+                  <ClientDetailPage
+                    client={selectedClient}
+                    clients={clients}
+                    contacts={contacts}
+                    setClients={setClients}
+                    onBack={() => navigate("clients")}
+                    onNav={handleNav}
+                    toast={addToast}
+                  />
                 )}
                 {page === "contacts" && (
                   <ContactsPage
+                    contacts={contacts}
+                    setContacts={setContacts}
                     onDetail={c => { setSelectedContact(c); navigate("contact-detail"); }}
-                    clients={clients} contracts={contracts} setContracts={setContracts} toast={addToast}
+                    clients={clients}
+                    contracts={contracts}
+                    setContracts={setContracts}
+                    toast={addToast}
                   />
                 )}
                 {page === "contact-detail" && selectedContact && (
                   <ContactDetailPage contact={selectedContact} onBack={() => navigate("contacts")} toast={addToast} />
                 )}
                 {page === "contracts" && (
-                  <ContractsPage contracts={contracts} clients={clients} setContracts={setContracts}
-                    onDetail={c => { setSelectedContract(c); navigate("contract-detail"); }} toast={addToast} />
+                  <ContractsPage
+                    contracts={contracts}
+                    clients={clients}
+                    contacts={contacts}
+                    setContracts={setContracts}
+                    onDetail={c => { setSelectedContract(c); navigate("contract-detail"); }}
+                    toast={addToast}
+                  />
                 )}
                 {page === "contract-detail" && selectedContract && (
-                  <ContractDetailPage contract={selectedContract} contracts={contracts} setContracts={setContracts}
-                    onBack={() => navigate("contracts")} toast={addToast} />
+                  <ContractDetailPage
+                    contract={selectedContract}
+                    contracts={contracts}
+                    contacts={contacts}
+                    setContracts={setContracts}
+                    onBack={() => navigate("contracts")}
+                    toast={addToast}
+                  />
                 )}
                 {(page === "settings" || page.startsWith("settings-")) && (
                  <SettingsPage
@@ -3026,7 +3389,14 @@ if (!isSignedIn) {
         </div>
 
         {searchOpen && searchQuery && (
-          <SearchOverlay query={searchQuery} clients={clients} contracts={contracts} onClose={() => { setSearchOpen(false); setSearchQuery(""); }} onNav={handleNav} />
+          <SearchOverlay
+            query={searchQuery}
+            clients={clients}
+            contacts={contacts}
+            contracts={contracts}
+            onClose={() => { setSearchOpen(false); setSearchQuery(""); }}
+            onNav={handleNav}
+          />
         )}
         {signOutOpen && <SignOutModal onConfirm={handleSignOut} onCancel={() => setSignOutOpen(false)} />}
       </div>

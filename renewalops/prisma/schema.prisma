@@ -16,6 +16,7 @@ enum ContractType {
   MAINTENANCE
   SUPPORT
   SERVICE
+  LICENSING
 }
 
 enum ContractStatus {
@@ -24,6 +25,8 @@ enum ContractStatus {
   OVERDUE
   RENEWED
   DECLINED
+  CANCELLED
+  ON_HOLD
 }
 
 enum EmailStatus {
@@ -53,8 +56,28 @@ model Client {
   email         String?
   phone         String?
   address       String?
+  status        String  @default("Active")
 
   contracts Contract[]
+  contacts  Contact[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Contact {
+  id          String  @id @default(cuid())
+  name        String
+  company     String
+  role        String?
+  email       String?
+  phone       String?
+  status      String  @default("Active")
+  lastContact String?
+  notes       String?
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -66,10 +89,17 @@ model Contract {
   contractType ContractType
   status       ContractStatus @default(ACTIVE)
 
-  startDate     DateTime
-  renewalDate   DateTime
-  contractValue Float?
-  autoRenewal   Boolean  @default(false)
+  reference          String?
+  serviceDescription String?
+  startDate          DateTime
+  renewalDate        DateTime
+  contractValue      Float?
+  currency           String   @default("MUR")
+  autoRenewal        Boolean  @default(false)
+  renewalFrequency   String   @default("Yearly")
+  noticePeriod       String?
+  assignedTo         String?
+  recipientTypes     String[] @default([])
 
   clientId String
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
