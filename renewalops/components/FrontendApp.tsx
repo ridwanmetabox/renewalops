@@ -632,12 +632,49 @@ function BackButton({ onClick, label = "Back" }: { onClick: () => void; label?: 
     </button>
   );
 }
-
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
-    <button role="switch" aria-checked={checked} onClick={onChange}
-      className={cn("relative inline-flex h-5 w-9 items-center rounded-full transition-colors", checked ? "bg-foreground" : "bg-zinc-300")}>
-      <span className={cn("inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform", checked ? "translate-x-[18px]" : "translate-x-0.5")} />
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className={cn(
+        "relative inline-flex h-8 w-[74px] shrink-0 items-center rounded-full border-2 transition-all duration-200",
+        "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background",
+        checked
+          ? "bg-teal-500 border-teal-300 focus:ring-teal-300"
+          : "bg-slate-800 border-slate-500 focus:ring-slate-400"
+      )}
+    >
+      <span
+        className={cn(
+          "absolute text-[11px] font-bold tracking-wide transition-all",
+          checked
+            ? "left-3 text-white opacity-100"
+            : "left-3 text-white/0 opacity-0"
+        )}
+      >
+        ON
+      </span>
+
+      <span
+        className={cn(
+          "absolute text-[11px] font-bold tracking-wide transition-all",
+          checked
+            ? "right-3 text-white/0 opacity-0"
+            : "right-3 text-white opacity-100"
+        )}
+      >
+        OFF
+      </span>
+
+      <span
+        className={cn(
+          "absolute top-1 h-5 w-5 rounded-full bg-white shadow-lg transition-all duration-200",
+          checked ? "right-1" : "left-1"
+        )}
+      />
     </button>
   );
 }
@@ -2630,7 +2667,10 @@ function AddContractWizard({ clients, contacts = [], onSave, onClose }: { client
 // ─── RENEWAL CALENDAR ─────────────────────────────────────────────────────────
 
 function RenewalCalendar({ contracts }: { contracts: Contract[] }) {
-  const [curDate, setCurDate] = useState(new Date(2025, 6, 1));
+  const [curDate, setCurDate] = useState(() => {
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), 1);
+});
   const year = curDate.getFullYear();
   const month = curDate.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
