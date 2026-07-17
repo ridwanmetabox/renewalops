@@ -13,7 +13,6 @@ export function ThemeProvider({
       attribute="class"
       defaultTheme="light"
       enableSystem={false}
-      storageKey="renewalops-theme"
       disableTransitionOnChange
     >
       {children}

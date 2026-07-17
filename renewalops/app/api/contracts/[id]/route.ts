@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
 const contractInclude = {
   client: true,
   emailLogs: true,
@@ -22,6 +28,7 @@ function toContractType(value: unknown) {
   if (normalized === "MAINTENANCE") return "MAINTENANCE";
   if (normalized === "SUPPORT") return "SUPPORT";
   if (normalized === "LICENSING") return "LICENSING";
+
   return "SERVICE";
 }
 
@@ -32,6 +39,7 @@ function toContractStatus(value: unknown) {
     .replaceAll(" ", "_")
     .replaceAll("-", "_");
 
+  if (normalized === "ACTIVE") return "ACTIVE";
   if (normalized === "DUE_SOON") return "EXPIRING_SOON";
   if (normalized === "EXPIRING_SOON") return "EXPIRING_SOON";
   if (normalized === "OVERDUE") return "OVERDUE";
@@ -39,6 +47,7 @@ function toContractStatus(value: unknown) {
   if (normalized === "DECLINED") return "DECLINED";
   if (normalized === "CANCELLED") return "CANCELLED";
   if (normalized === "ON_HOLD") return "ON_HOLD";
+
   return "ACTIVE";
 }
 
@@ -58,8 +67,7 @@ function reminderDaysFromBody(body: Record<string, unknown>) {
       if (!reminder || typeof reminder !== "object") return null;
 
       const record = reminder as Record<string, unknown>;
-      const rawDays = record.days ?? record.daysBefore;
-      const parsed = Number(rawDays);
+      const parsed = Number(record.days ?? record.daysBefore);
 
       if (!Number.isFinite(parsed)) return null;
 
@@ -88,38 +96,12 @@ function notesFromBody(body: Record<string, unknown>) {
     .filter(Boolean);
 }
 
-export async function GET() {
+export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const contracts = await prisma.contract.findMany({
-      include: contractInclude,
-      orderBy: {
-        renewalDate: "asc",
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      contracts,
-    });
-  } catch (error) {
-    console.error("GET /api/contracts error:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to load contracts",
-      },
-      { status: 500 },
-    );
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
+    const { id } = await context.params;
     const body = (await request.json()) as Record<string, unknown>;
 
     const contractName = String(body.contractName ?? body.name ?? "").trim();
-    const clientId = String(body.clientId ?? "").trim();
 
     if (!contractName) {
       return NextResponse.json(
@@ -131,20 +113,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!clientId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Client is required",
-        },
-        { status: 400 },
-      );
-    }
-
-    const reminders = reminderDaysFromBody(body);
-    const notes = notesFromBody(body);
-
-    const contract = await prisma.contract.create({
+    const updatedContract = await prisma.contract.update({
+      where: {
+        id,
+      },
       data: {
         contractName,
         contractType: toContractType(body.contractType ?? body.type),
@@ -153,7 +125,9 @@ export async function POST(request: NextRequest) {
         serviceDescription: String(body.serviceDescription ?? "").trim() || null,
         startDate: new Date(String(body.startDate ?? new Date())),
         renewalDate: new Date(String(body.renewalDate ?? new Date())),
-        contractValue: numberOrNull(body.contractValue ?? body.amount ?? body.value),
+        contractValue: numberOrNull(
+          body.contractValue ?? body.amount ?? body.value,
+        ),
         currency: String(body.currency ?? "MUR").trim() || "MUR",
         autoRenewal: Boolean(body.autoRenewal ?? body.autoRenew),
         renewalFrequency:
@@ -163,41 +137,70 @@ export async function POST(request: NextRequest) {
         recipientTypes: Array.isArray(body.recipientTypes)
           ? body.recipientTypes.map(String)
           : [],
-        client: {
-          connect: {
-            id: clientId,
-          },
+      },
+    });
+
+    const reminders = reminderDaysFromBody(body);
+
+    if (reminders.length > 0) {
+      await prisma.renewalReminder.deleteMany({
+        where: {
+          contractId: id,
         },
-        reminders:
-          reminders.length > 0
-            ? {
-                create: reminders.map((reminder) => ({
-                  daysBefore: reminder.daysBefore,
-                  sent: reminder.sent,
-                })),
-              }
-            : undefined,
-        notes:
-          notes.length > 0
-            ? {
-                create: notes.map((note) => ({
-                  note,
-                })),
-              }
-            : undefined,
+      });
+
+      await prisma.renewalReminder.createMany({
+        data: reminders.map((reminder) => ({
+          contractId: id,
+          daysBefore: reminder.daysBefore,
+          sent: reminder.sent,
+        })),
+      });
+    }
+
+    const incomingNotes = notesFromBody(body);
+
+    if (incomingNotes.length > 0) {
+      const existingNotes = await prisma.internalNote.findMany({
+        where: {
+          contractId: id,
+        },
+        select: {
+          note: true,
+        },
+      });
+
+      const existingNoteSet = new Set(
+        existingNotes.map((existingNote) => existingNote.note),
+      );
+
+      const newNotes = incomingNotes.filter(
+        (note) => !existingNoteSet.has(note),
+      );
+
+      if (newNotes.length > 0) {
+        await prisma.internalNote.createMany({
+          data: newNotes.map((note) => ({
+            contractId: id,
+            note,
+          })),
+        });
+      }
+    }
+
+    const contract = await prisma.contract.findUnique({
+      where: {
+        id: updatedContract.id,
       },
       include: contractInclude,
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        contract,
-      },
-      { status: 201 },
-    );
+    return NextResponse.json({
+      success: true,
+      contract,
+    });
   } catch (error) {
-    console.error("POST /api/contracts error:", error);
+    console.error("PATCH /api/contracts/[id] error:", error);
 
     return NextResponse.json(
       {
@@ -205,7 +208,37 @@ export async function POST(request: NextRequest) {
         error:
           error instanceof Error
             ? error.message
-            : "Failed to create contract",
+            : "Failed to update contract",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  try {
+    const { id } = await context.params;
+
+    await prisma.contract.delete({
+      where: {
+        id,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      deletedId: id,
+    });
+  } catch (error) {
+    console.error("DELETE /api/contracts/[id] error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete contract",
       },
       { status: 500 },
     );

@@ -171,6 +171,260 @@ async function readApiJson(response: Response, apiName: string) {
   return response.json();
 }
 
+
+type ApiRecord = Record<string, unknown>;
+
+type DatabaseClient = {
+  id?: string;
+  company?: string;
+  companyName?: string;
+  contact?: string;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  billingAddress?: string | null;
+  contacts?: unknown[];
+  contracts?: unknown[] | number;
+  status?: unknown;
+  totalOutstanding?: number | string | null;
+  overdueAmount?: number | string | null;
+  nextRenewal?: string | null;
+  joinDate?: string | null;
+  createdAt?: string | null;
+};
+
+type DatabaseContact = {
+  id?: string;
+  name?: string | null;
+  company?: string | null;
+  role?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  status?: unknown;
+  lastContact?: string | null;
+  notes?: string | null;
+  clientId?: string | null;
+  client?: unknown;
+  createdAt?: string | null;
+};
+
+type DatabaseContract = {
+  id?: string;
+  name?: string | null;
+  contractName?: string | null;
+  clientId?: string | null;
+  client?: unknown;
+  reference?: string | null;
+  serviceDescription?: string | null;
+  startDate?: string | Date | null;
+  renewalDate?: string | Date | null;
+  amount?: number | string | null;
+  value?: number | string | null;
+  currency?: string | null;
+  assignedTo?: string | null;
+  status?: unknown;
+  contractType?: string | null;
+  autoRenew?: boolean | null;
+  renewalFrequency?: Contract["renewalFrequency"] | null;
+  noticePeriod?: string | null;
+  reminders?: ContractReminder[] | null;
+  recipientTypes?: string[] | null;
+  notes?: string[] | null;
+  contractValue?: number | string | null;
+autoRenewal?: boolean | null;
+};
+
+function asRecord(value: unknown): ApiRecord {
+  return value && typeof value === "object" ? (value as ApiRecord) : {};
+}
+
+function stringValue(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return fallback;
+}
+
+function numberValue(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function dateOnly(value: unknown, fallback = "—"): string {
+  if (!value) return fallback;
+  const date = new Date(value as string | Date);
+  if (Number.isNaN(date.getTime())) return stringValue(value, fallback);
+  return date.toISOString().slice(0, 10);
+}
+
+function normalizeStatus(value: unknown, fallback: Status = "Active"): Status {
+  const raw = stringValue(value, fallback).trim();
+
+  const normalized = raw
+    .toUpperCase()
+    .replaceAll("-", "_")
+    .replaceAll(" ", "_");
+
+  if (normalized === "ACTIVE") return "Active";
+  if (normalized === "PENDING") return "Pending";
+  if (normalized === "OVERDUE") return "Overdue";
+  if (normalized === "DUE_SOON") return "Due Soon";
+ if (normalized === "EXPIRING_SOON") return "Due Soon";
+  if (normalized === "CANCELLED") return "Cancelled";
+  if (normalized === "ON_TRACK") return "On Track";
+  if (normalized === "RENEWED") return "Renewed";
+  if (normalized === "ON_HOLD") return "On Hold";
+
+  return fallback;
+}
+
+function listFromApi(data: unknown, key: string): unknown[] {
+  if (Array.isArray(data)) return data;
+  const record = asRecord(data);
+  const value = record[key];
+  return Array.isArray(value) ? value : [];
+}
+
+function itemFromApi(data: unknown, key: string): unknown {
+  const record = asRecord(data);
+  return record[key] ?? data;
+}
+
+function normalizeClient(raw: unknown): Client {
+  const record = asRecord(raw) as DatabaseClient;
+  const contacts = Array.isArray(record.contacts) ? record.contacts : [];
+  const firstContact = asRecord(contacts[0]);
+  const contractsValue = record.contracts;
+  const company = stringValue(record.company, stringValue(record.companyName, "Unnamed Client"));
+
+  return {
+    id: stringValue(record.id, `client-${Math.random().toString(36).slice(2, 10)}`),
+    company,
+    contact: stringValue(record.contact, stringValue(firstContact.name, "No contact")),
+    email: stringValue(record.email, stringValue(firstContact.email, "")),
+    phone: stringValue(record.phone, stringValue(firstContact.phone, "")),
+    status: normalizeStatus(record.status, "Active"),
+    billingAddress: stringValue(record.billingAddress, stringValue(record.address, "Unknown address")),
+    totalOutstanding: numberValue(record.totalOutstanding, 0),
+    overdueAmount: numberValue(record.overdueAmount, 0),
+    nextRenewal: stringValue(record.nextRenewal, "TBD"),
+    contracts: Array.isArray(contractsValue)
+      ? contractsValue.length
+      : typeof contractsValue === "number"
+        ? contractsValue
+        : 0,
+    joinDate: dateOnly(record.joinDate ?? record.createdAt, new Date().toISOString().slice(0, 10)),
+  };
+}
+
+function normalizeContact(raw: unknown): Contact {
+  const record = asRecord(raw) as DatabaseContact;
+  const client = asRecord(record.client);
+
+  return {
+    id: stringValue(record.id, `contact-${Math.random().toString(36).slice(2, 10)}`),
+    name: stringValue(record.name, "Unnamed Contact"),
+    company: stringValue(record.company, stringValue(client.companyName, stringValue(client.company, "Unknown Company"))),
+    role: stringValue(record.role, ""),
+    email: stringValue(record.email, ""),
+    phone: stringValue(record.phone, ""),
+    status: normalizeStatus(record.status, "Active"),
+    lastContact: dateOnly(record.lastContact ?? record.createdAt, new Date().toISOString().slice(0, 10)),
+    notes: stringValue(record.notes, ""),
+  };
+}
+
+function normalizeContract(raw: unknown): Contract {
+  const record = asRecord(raw) as DatabaseContract;
+  const clientRecord = asRecord(record.client);
+  const renewalDate = dateOnly(record.renewalDate, "");
+  const daysLeft = renewalDate ? calcDaysLeft(renewalDate) : 0;
+
+  const clientName = stringValue(
+    record.client,
+    stringValue(
+      clientRecord.companyName,
+      stringValue(clientRecord.company, "Unknown Client"),
+    ),
+  );
+
+  const rawContractType = stringValue(record.contractType, "Service")
+    .toLowerCase()
+    .replaceAll("_", " ");
+
+  const contractType =
+    rawContractType.charAt(0).toUpperCase() + rawContractType.slice(1);
+
+  const rawReminders = Array.isArray(record.reminders)
+    ? record.reminders
+    : [];
+
+  const reminders: ContractReminder[] = rawReminders.map((reminder) => {
+    const reminderRecord = asRecord(reminder);
+    const scheduledValue =
+      reminderRecord.scheduledDate ?? reminderRecord.sentAt ?? undefined;
+
+    return {
+      days: numberValue(reminderRecord.days ?? reminderRecord.daysBefore, 0),
+      sent: Boolean(reminderRecord.sent),
+      ...(scheduledValue
+        ? {
+            scheduledDate: dateOnly(scheduledValue, ""),
+          }
+        : {}),
+    };
+  });
+
+  const rawNotes = Array.isArray(record.notes) ? record.notes : [];
+
+  const notes = rawNotes
+    .map((note) => {
+      if (typeof note === "string") return note;
+
+      const noteRecord = asRecord(note);
+
+      return stringValue(noteRecord.note, "");
+    })
+    .filter(Boolean);
+
+  return {
+    id: stringValue(
+      record.id,
+      `contract-${Math.random().toString(36).slice(2, 10)}`,
+    ),
+    name: stringValue(
+      record.name,
+      stringValue(record.contractName, "Untitled Contract"),
+    ),
+    clientId: stringValue(record.clientId, stringValue(clientRecord.id, "")),
+    client: clientName,
+    reference: stringValue(record.reference, "—"),
+    serviceDescription: stringValue(record.serviceDescription, ""),
+    startDate: dateOnly(record.startDate, ""),
+    renewalDate,
+    amount: numberValue(record.amount ?? record.value ?? record.contractValue, 0),
+    currency: stringValue(record.currency, "MUR"),
+    assignedTo: stringValue(record.assignedTo, ""),
+    status: normalizeStatus(
+      record.status,
+      daysLeft < 0 ? "Overdue" : daysLeft <= 30 ? "Due Soon" : "Active",
+    ),
+    contractType,
+    daysLeft,
+    autoRenew: Boolean(record.autoRenew ?? record.autoRenewal),
+    renewalFrequency: record.renewalFrequency ?? "Yearly",
+    noticePeriod: stringValue(record.noticePeriod, "30 days"),
+    reminders,
+    recipientTypes: Array.isArray(record.recipientTypes)
+      ? record.recipientTypes.map(String)
+      : [],
+    notes,
+  };
+}
+
 function statusColor(status: Status): string {
   const map: Record<Status, string> = {
     Active: "bg-zinc-900 text-white",
@@ -1103,6 +1357,7 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
 }
 
 
+
 // ─── CLIENTS PAGE ─────────────────────────────────────────────────────────────
 
 function ClientsPage({ clients, setClients, onDetail, toast }: {
@@ -1115,22 +1370,20 @@ function ClientsPage({ clients, setClients, onDetail, toast }: {
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
   const [newClient, setNewClient] = useState({ company: "", contact: "", email: "", phone: "", status: "Active" as Status, billingAddress: "" });
 
-const filterText = filter.toLowerCase();
+  const filterText = filter.toLowerCase();
 
-const filtered = clients.filter((c) =>
-  String(c.company ?? c.companyName ?? "")
-    .toLowerCase()
-    .includes(filterText) ||
-  String(c.contact ?? c.contacts?.[0]?.name ?? "")
-    .toLowerCase()
-    .includes(filterText) ||
-  String(c.email ?? c.contacts?.[0]?.email ?? "")
-    .toLowerCase()
-    .includes(filterText)
-);
+  const filtered = clients.filter((c) =>
+    String(c.company ?? "").toLowerCase().includes(filterText) ||
+    String(c.contact ?? "").toLowerCase().includes(filterText) ||
+    String(c.email ?? "").toLowerCase().includes(filterText)
+  );
 
 async function handleAdd() {
-  if (!newClient.company || !newClient.contact || !newClient.email) {
+  if (
+    !newClient.company.trim() ||
+    !newClient.contact.trim() ||
+    !newClient.email.trim()
+  ) {
     toast("Please fill in required fields.", "error");
     return;
   }
@@ -1140,24 +1393,38 @@ async function handleAdd() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
       body: JSON.stringify({
         company: newClient.company,
+        companyName: newClient.company,
         contact: newClient.contact,
         email: newClient.email,
         phone: newClient.phone,
         status: newClient.status,
         billingAddress: newClient.billingAddress,
+        address: newClient.billingAddress,
       }),
     });
 
     const data = await readApiJson(response, "/api/clients");
 
-    if (!response.ok || !data.success) {
-      throw new Error(data.message || "Failed to create client.");
+    if (!response.ok) {
+      throw new Error(
+        stringValue(
+          asRecord(data).message ?? asRecord(data).error,
+          "Failed to create client.",
+        ),
+      );
     }
 
-    setClients([data.client as Client, ...clients]);
+    const createdClient = normalizeClient({
+      ...newClient,
+      ...asRecord(itemFromApi(data, "client")),
+      contact: newClient.contact,
+    });
+
+    setClients([createdClient, ...clients]);
     setAddOpen(false);
 
     setNewClient({
@@ -1175,21 +1442,77 @@ async function handleAdd() {
 
     toast(
       error instanceof Error ? error.message : "Failed to create client.",
-      "error"
+      "error",
     );
   }
 }
 
-  function handleEdit(updated: Client) {
-    setClients(clients.map(c => c.id === updated.id ? updated : c));
-    setEditTarget(null);
-    toast("Client updated successfully.");
+  async function handleEdit(updatedClient: Client) {
+    if (!updatedClient.id) {
+      toast("Client ID is missing.", "error");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/clients/${updatedClient.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          company: updatedClient.company,
+          companyName: updatedClient.company,
+          contact: updatedClient.contact,
+          email: updatedClient.email,
+          phone: updatedClient.phone,
+          status: updatedClient.status,
+          billingAddress: updatedClient.billingAddress,
+          address: updatedClient.billingAddress,
+        }),
+      });
+
+      const data = await readApiJson(response, `/api/clients/${updatedClient.id}`);
+
+      if (!response.ok) {
+        throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to update client."));
+      }
+
+      const savedClient = normalizeClient({
+        ...updatedClient,
+        ...asRecord(itemFromApi(data, "client")),
+        contact: updatedClient.contact,
+      });
+
+      setClients(clients.map((client) => client.id === updatedClient.id ? savedClient : client));
+      setEditTarget(null);
+      toast("Client updated successfully.");
+    } catch (error) {
+      console.error("Update client error:", error);
+      toast(error instanceof Error ? error.message : "Failed to update client.", "error");
+    }
   }
 
-  function handleDelete(id: string) {
-    setClients(clients.filter(c => c.id !== id));
-    setDeleteTarget(null);
-    toast("Client deleted.", "info");
+  async function handleDelete(id: string) {
+    try {
+      const response = await fetch(`/api/clients/${id}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+      });
+
+      const data = await readApiJson(response, `/api/clients/${id}`);
+
+      if (!response.ok) {
+        throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to delete client."));
+      }
+
+      setClients(clients.filter((client) => client.id !== id));
+      setDeleteTarget(null);
+      toast("Client deleted from the database.", "info");
+    } catch (error) {
+      console.error("Delete client error:", error);
+      toast(error instanceof Error ? error.message : "Failed to delete client.", "error");
+    }
   }
 
   return (
@@ -1223,7 +1546,7 @@ async function handleAdd() {
                 <tr key={c.id} className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => onDetail(c)}>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center text-xs font-bold shrink-0">{c.company[0]}</div>
+                      <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center text-xs font-bold shrink-0">{c.company?.[0] || "?"}</div>
                       <span className="font-medium">{c.company}</span>
                     </div>
                   </td>
@@ -1243,6 +1566,11 @@ async function handleAdd() {
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-8 text-center text-sm text-muted-foreground">No clients found</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -1266,7 +1594,7 @@ async function handleAdd() {
               ].map(f => (
                 <div key={f.key}>
                   <label className="text-sm font-medium block mb-1">{f.label}</label>
-                  <input value={(newClient as any)[f.key]} onChange={e => setNewClient({ ...newClient, [f.key]: e.target.value })} placeholder={f.placeholder}
+                  <input value={(newClient as Record<string, string>)[f.key]} onChange={e => setNewClient({ ...newClient, [f.key]: e.target.value })} placeholder={f.placeholder}
                     className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
                 </div>
               ))}
@@ -1293,7 +1621,7 @@ async function handleAdd() {
           <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl">
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
             <h2 className="font-bold text-lg mb-1">Delete client?</h2>
-            <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{deleteTarget.company}</strong> and all associated records.</p>
+            <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{deleteTarget.company}</strong> from the database.</p>
             <div className="flex gap-2">
               <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
               <button onClick={() => handleDelete(deleteTarget.id)} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
@@ -1318,7 +1646,7 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
           {[{ label: "Company", key: "company" }, { label: "Main Contact", key: "contact" }, { label: "Email", key: "email" }, { label: "Phone", key: "phone" }, { label: "Billing Address", key: "billingAddress" }].map(f => (
             <div key={f.key}>
               <label className="text-sm font-medium block mb-1">{f.label}</label>
-              <input value={(form as any)[f.key]} onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+              <input value={(form as unknown as Record<string, string | number>)[f.key] ?? ""} onChange={e => setForm({ ...form, [f.key]: e.target.value })}
                 className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
             </div>
           ))}
@@ -1339,6 +1667,7 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
   );
 }
 
+
 // ─── CLIENT DETAIL ────────────────────────────────────────────────────────────
 
 function ClientDetailPage({ client: initClient, clients, contacts, setClients, onBack, onNav, toast }: {
@@ -1349,6 +1678,52 @@ function ClientDetailPage({ client: initClient, clients, contacts, setClients, o
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleted, setDeleted] = useState(false);
   const client = clients.find(c => c.id === initClient.id) || initClient;
+
+  async function handleEdit(updatedClient: Client) {
+    try {
+      const response = await fetch(`/api/clients/${updatedClient.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          company: updatedClient.company,
+          companyName: updatedClient.company,
+          contact: updatedClient.contact,
+          email: updatedClient.email,
+          phone: updatedClient.phone,
+          status: updatedClient.status,
+          billingAddress: updatedClient.billingAddress,
+          address: updatedClient.billingAddress,
+        }),
+      });
+
+      const data = await readApiJson(response, `/api/clients/${updatedClient.id}`);
+      if (!response.ok) throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to update client."));
+
+      const savedClient = normalizeClient({ ...updatedClient, ...asRecord(itemFromApi(data, "client")), contact: updatedClient.contact });
+      setClients(clients.map(c => c.id === savedClient.id ? savedClient : c));
+      setEditOpen(false);
+      toast("Client updated in the database.");
+    } catch (error) {
+      console.error("Update client detail error:", error);
+      toast(error instanceof Error ? error.message : "Failed to update client.", "error");
+    }
+  }
+
+  async function handleDelete() {
+    try {
+      const response = await fetch(`/api/clients/${client.id}`, { method: "DELETE", headers: { Accept: "application/json" } });
+      const data = await readApiJson(response, `/api/clients/${client.id}`);
+      if (!response.ok) throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to delete client."));
+
+      setClients(clients.filter(c => c.id !== client.id));
+      setDeleted(true);
+      setDeleteOpen(false);
+      toast("Client deleted from the database.", "info");
+    } catch (error) {
+      console.error("Delete client detail error:", error);
+      toast(error instanceof Error ? error.message : "Failed to delete client.", "error");
+    }
+  }
 
   if (deleted) return (
     <div className="flex flex-col items-center justify-center h-64 space-y-4">
@@ -1391,15 +1766,6 @@ function ClientDetailPage({ client: initClient, clients, contacts, setClients, o
             </div>
             <p className="text-sm text-muted-foreground">{client.contracts} contract{client.contracts !== 1 ? "s" : ""} associated with this client.</p>
           </div>
-          <div className="bg-card border border-border rounded-xl p-5">
-            <h2 className="font-semibold mb-4">Recent Email Activity</h2>
-            {[{ subject: "Renewal reminder sent", date: "2025-07-01" }, { subject: "Invoice issued", date: "2025-06-15" }, { subject: "Contract documentation", date: "2025-06-01" }].map((e, i) => (
-              <div key={i} className="flex items-center justify-between text-sm py-2 border-b border-border last:border-0">
-                <div className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-muted-foreground" />{e.subject}</div>
-                <span className="text-xs text-muted-foreground font-mono">{e.date}</span>
-              </div>
-            ))}
-          </div>
         </div>
         <div className="space-y-4">
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
@@ -1423,22 +1789,23 @@ function ClientDetailPage({ client: initClient, clients, contacts, setClients, o
                 </div>
               </div>
             ))}
+            {contacts.filter(c => c.company === client.company).length === 0 && <p className="text-sm text-muted-foreground">No contacts linked to this client yet.</p>}
           </div>
         </div>
       </div>
 
       {editOpen && (
-        <EditClientModal client={client} onClose={() => setEditOpen(false)} onSave={updated => { setClients(clients.map(c => c.id === updated.id ? updated : c)); setEditOpen(false); toast("Client updated."); }} />
+        <EditClientModal client={client} onClose={() => setEditOpen(false)} onSave={handleEdit} />
       )}
       {deleteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl">
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
             <h2 className="font-bold text-lg mb-1">Delete client?</h2>
-            <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{client.company}</strong>.</p>
+            <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{client.company}</strong> from the database.</p>
             <div className="flex gap-2">
               <button onClick={() => setDeleteOpen(false)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
-              <button onClick={() => { setClients(clients.filter(c => c.id !== client.id)); setDeleted(true); setDeleteOpen(false); toast("Client deleted.", "info"); }} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
+              <button onClick={handleDelete} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
             </div>
           </div>
         </div>
@@ -1447,12 +1814,34 @@ function ClientDetailPage({ client: initClient, clients, contacts, setClients, o
   );
 }
 
+
 // ─── CONTACTS PAGE ────────────────────────────────────────────────────────────
 
 const BLANK_CONTACT: Omit<Contact, "id"> = {
   name: "", company: "", role: "", email: "", phone: "", status: "Active", lastContact: "", notes: ""
 };
+function normalizeContactFromApi(
+  rawValue: unknown,
+  fallback?: Partial<Contact>,
+): Contact {
+  const raw = rawValue as Partial<Contact>;
 
+  return {
+    id: String(raw.id ?? fallback?.id ?? ""),
+    name: String(raw.name ?? fallback?.name ?? ""),
+    company: String(raw.company ?? fallback?.company ?? ""),
+    role: String(raw.role ?? fallback?.role ?? ""),
+    email: String(raw.email ?? fallback?.email ?? ""),
+    phone: String(raw.phone ?? fallback?.phone ?? ""),
+    status: (raw.status ?? fallback?.status ?? "Active") as Status,
+    lastContact: String(
+      raw.lastContact ??
+        fallback?.lastContact ??
+        new Date().toISOString().split("T")[0],
+    ),
+    notes: String(raw.notes ?? fallback?.notes ?? ""),
+  };
+}
 function ContactsPage({
   contacts, setContacts, onDetail, clients, contracts, setContracts, toast
 }: {
@@ -1466,19 +1855,26 @@ function ContactsPage({
 }) {
   const [filter, setFilter] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
+  const [editTarget, setEditTarget] = useState<Contact | null>(null);
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [addContractOpen, setAddContractOpen] = useState(false);
   const [contactForm, setContactForm] = useState<Omit<Contact, "id">>(BLANK_CONTACT);
 
-  const filtered = contacts.filter(c =>
-    c.name.toLowerCase().includes(filter.toLowerCase()) ||
-    c.company.toLowerCase().includes(filter.toLowerCase()) ||
-    c.email.toLowerCase().includes(filter.toLowerCase())
+  const filterText = filter.toLowerCase();
+
+  const filtered = contacts.filter((c) =>
+    String(c.name ?? "").toLowerCase().includes(filterText) ||
+    String(c.company ?? "").toLowerCase().includes(filterText) ||
+    String(c.email ?? "").toLowerCase().includes(filterText)
   );
 
+  function clientIdForCompany(company: string) {
+    return clients.find((client) => client.company === company)?.id ?? "";
+  }
+
   async function saveContact() {
-    if (!contactForm.name.trim() || !contactForm.email.trim()) {
-      toast("Name and email are required.", "error");
+    if (!contactForm.name.trim() || !contactForm.company.trim() || !contactForm.email.trim()) {
+      toast("Name, company and email are required.", "error");
       return;
     }
 
@@ -1487,70 +1883,144 @@ function ContactsPage({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
         body: JSON.stringify({
           ...contactForm,
+          clientId: clientIdForCompany(contactForm.company),
           lastContact: contactForm.lastContact || new Date().toISOString().split("T")[0],
         }),
       });
 
       const data = await readApiJson(response, "/api/contacts");
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to create contact.");
+      if (!response.ok) {
+        throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to create contact."));
       }
 
-      setContacts([data.contact as Contact, ...contacts]);
+      const savedContact = normalizeContact({ ...contactForm, ...asRecord(itemFromApi(data, "contact")) });
+
+      setContacts([savedContact, ...contacts]);
       setAddContactOpen(false);
       setContactForm(BLANK_CONTACT);
 
-      toast("Contact added successfully.");
+      toast("Contact added to the database.");
     } catch (error) {
       console.error("Create contact frontend error:", error);
-
-      toast(
-        error instanceof Error ? error.message : "Failed to create contact.",
-        "error"
-      );
+      toast(error instanceof Error ? error.message : "Failed to create contact.", "error");
     }
   }
 
-  async function saveContractFromContacts(c: Contract) {
+  async function handleEditContact(updatedContact: Contact) {
+    if (!updatedContact.id) {
+      toast("Contact ID is missing.", "error");
+      return;
+    }
+
     try {
-      const response = await fetch("/api/contracts", {
-        method: "POST",
+      const response = await fetch(`/api/contacts/${updatedContact.id}`, {
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
-        body: JSON.stringify(c),
+        body: JSON.stringify({
+          ...updatedContact,
+          clientId: clientIdForCompany(updatedContact.company),
+        }),
       });
 
-      const data = await readApiJson(response, "/api/contracts");
+      const data = await readApiJson(response, `/api/contacts/${updatedContact.id}`);
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to create contract.");
+      if (!response.ok) {
+        throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to update contact."));
       }
 
-      setContracts([data.contract as Contract, ...contracts]);
-      setAddContractOpen(false);
+      const savedContact = normalizeContact({ ...updatedContact, ...asRecord(itemFromApi(data, "contact")) });
 
-      toast("Contract added successfully.");
+      setContacts(contacts.map((contact) =>
+        contact.id === updatedContact.id ? savedContact : contact,
+      ));
+
+      setEditTarget(null);
+      toast("Contact updated in the database.");
     } catch (error) {
-      console.error("Create contract from contacts error:", error);
-
-      toast(
-        error instanceof Error ? error.message : "Failed to create contract.",
-        "error"
-      );
+      console.error("Update contact error:", error);
+      toast(error instanceof Error ? error.message : "Failed to update contact.", "error");
     }
   }
 
-  function removeContactFromScreen(id: string) {
-    setContacts(contacts.filter(c => c.id !== id));
-    setDeleteTarget(null);
-    toast("Contact removed from the screen. Database delete can be connected next.", "info");
+  async function handleDeleteContact(id: string) {
+    try {
+      const response = await fetch(`/api/contacts/${id}`, {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      const data = await readApiJson(response, `/api/contacts/${id}`);
+
+      if (!response.ok) {
+        throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to delete contact."));
+      }
+
+      setContacts(contacts.filter((contact) => contact.id !== id));
+      setDeleteTarget(null);
+
+      toast("Contact deleted from the database.", "info");
+    } catch (error) {
+      console.error("Delete contact error:", error);
+      toast(error instanceof Error ? error.message : "Failed to delete contact.", "error");
+    }
   }
 
+  async function saveContractFromContacts(contractToSave: Contract) {
+  try {
+    const response = await fetch("/api/contracts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        ...contractToSave,
+        contractName: contractToSave.name,
+        name: contractToSave.name,
+        type: contractToSave.contractType,
+        value: contractToSave.amount,
+      }),
+    });
+
+    const data = await readApiJson(response, "/api/contracts");
+
+    if (!response.ok) {
+      throw new Error(
+        stringValue(
+          asRecord(data).message ?? asRecord(data).error,
+          "Failed to create contract.",
+        ),
+      );
+    }
+
+    const savedContract = normalizeContract({
+      ...contractToSave,
+      ...asRecord(itemFromApi(data, "contract")),
+    });
+
+    setContracts([savedContract, ...contracts]);
+    setAddContractOpen(false);
+
+    toast("Contract added to the database.");
+  } catch (error) {
+    console.error("Create contract from contacts error:", error);
+
+    toast(
+      error instanceof Error ? error.message : "Failed to create contract.",
+      "error",
+    );
+  }
+}
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -1577,7 +2047,7 @@ function ContactsPage({
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card z-10">
               <tr className="border-b border-border bg-muted/40">
-                {["Name", "Company", "Role", "Email", "Phone", "Status", "Last Contact", ""].map(h => (
+                {["Name", "Company", "Role", "Email", "Phone", "Status", "Last Contact", "Actions"].map(h => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -1588,21 +2058,35 @@ function ContactsPage({
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       <div className="w-7 h-7 rounded-full bg-foreground/10 flex items-center justify-center text-xs font-bold shrink-0">
-                        {c.name.split(" ").map(w => w[0]).join("").slice(0, 2)}
+                        {String(c.name || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
                       </div>
                       <span className="font-medium">{c.name}</span>
                     </div>
                   </td>
                   <td className="px-5 py-3.5 text-muted-foreground">{c.company}</td>
-                  <td className="px-5 py-3.5 text-muted-foreground">{c.role}</td>
+                  <td className="px-5 py-3.5 text-muted-foreground">{c.role || "—"}</td>
                   <td className="px-5 py-3.5 text-muted-foreground">{c.email}</td>
-                  <td className="px-5 py-3.5 font-mono text-xs text-muted-foreground">{c.phone}</td>
+                  <td className="px-5 py-3.5 font-mono text-xs text-muted-foreground">{c.phone || "—"}</td>
                   <td className="px-5 py-3.5"><StatusBadge status={c.status} /></td>
-                  <td className="px-5 py-3.5 font-mono text-xs text-muted-foreground">{c.lastContact}</td>
+                  <td className="px-5 py-3.5 font-mono text-xs text-muted-foreground">{c.lastContact || "—"}</td>
                   <td className="px-5 py-3.5">
-                    <button onClick={e => { e.stopPropagation(); setDeleteTarget(c); }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => setEditTarget(c)}
+                        className="p-1.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                        title="Edit"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => setDeleteTarget(c)}
+                        className="p-1.5 rounded hover:bg-red-50 transition-colors text-muted-foreground hover:text-red-500"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1625,13 +2109,22 @@ function ContactsPage({
           <div className="mx-auto bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl">
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
             <h2 className="font-bold text-lg mb-1">Delete contact?</h2>
-            <p className="text-sm text-muted-foreground mb-5">Remove <strong>{deleteTarget.name}</strong> from contacts?</p>
+            <p className="text-sm text-muted-foreground mb-5">Remove <strong>{deleteTarget.name}</strong> from the database?</p>
             <div className="flex gap-2">
               <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
-              <button onClick={() => removeContactFromScreen(deleteTarget.id)} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
+              <button onClick={() => handleDeleteContact(deleteTarget.id)} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
             </div>
           </div>
         </div>
+      )}
+
+      {editTarget && (
+        <EditContactModal
+          contact={editTarget}
+          clients={clients}
+          onClose={() => setEditTarget(null)}
+          onSave={handleEditContact}
+        />
       )}
 
       {addContactOpen && (
@@ -1642,23 +2135,29 @@ function ContactsPage({
               <button onClick={() => { setAddContactOpen(false); setContactForm(BLANK_CONTACT); }} className="p-1.5 rounded hover:bg-accent text-muted-foreground"><X className="w-4 h-4" /></button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { label: "Full Name *", key: "name", placeholder: "Jean-Pierre Labelle" },
-                { label: "Company", key: "company", placeholder: "Rogers Company Ltd" },
-                { label: "Role / Position", key: "role", placeholder: "Finance Manager" },
-                { label: "Email Address *", key: "email", placeholder: "jp.labelle@rogers.mu" },
-                { label: "Phone (+230)", key: "phone", placeholder: "+230 5XXX XXXX" },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="text-sm font-medium block mb-1">{f.label}</label>
-                  <input
-                    value={(contactForm as any)[f.key]}
-                    onChange={e => setContactForm(p => ({ ...p, [f.key]: e.target.value }))}
-                    placeholder={f.placeholder}
-                    className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
-                  />
-                </div>
-              ))}
+              <div>
+                <label className="text-sm font-medium block mb-1">Full Name *</label>
+                <input value={contactForm.name} onChange={e => setContactForm(p => ({ ...p, name: e.target.value }))} placeholder="Jean-Pierre Labelle" className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1">Company *</label>
+                <select value={contactForm.company} onChange={e => setContactForm(p => ({ ...p, company: e.target.value }))} className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
+                  <option value="">Select client company</option>
+                  {clients.map(client => <option key={client.id} value={client.company}>{client.company}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1">Role / Position</label>
+                <input value={contactForm.role} onChange={e => setContactForm(p => ({ ...p, role: e.target.value }))} placeholder="Finance Manager" className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1">Email Address *</label>
+                <input value={contactForm.email} onChange={e => setContactForm(p => ({ ...p, email: e.target.value }))} placeholder="jp.labelle@company.mu" className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1">Phone (+230)</label>
+                <input value={contactForm.phone} onChange={e => setContactForm(p => ({ ...p, phone: e.target.value }))} placeholder="+230 5XXX XXXX" className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
+              </div>
               <div>
                 <label className="text-sm font-medium block mb-1">Status</label>
                 <select value={contactForm.status} onChange={e => setContactForm(p => ({ ...p, status: e.target.value as Status }))}
@@ -1693,15 +2192,122 @@ function ContactsPage({
   );
 }
 
+function EditContactModal({ contact, clients, onClose, onSave }: { contact: Contact; clients: Client[]; onClose: () => void; onSave: (c: Contact) => void }) {
+  const [form, setForm] = useState(contact);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+      <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="font-bold text-lg">Edit Contact</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-sm font-medium block mb-1">Full Name</label>
+            <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
+          </div>
+          <div>
+            <label className="text-sm font-medium block mb-1">Company</label>
+            <select value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
+              <option value="">Select client company</option>
+              {clients.map(client => <option key={client.id} value={client.company}>{client.company}</option>)}
+            </select>
+          </div>
+          {[{ label: "Role", key: "role" }, { label: "Email", key: "email" }, { label: "Phone", key: "phone" }, { label: "Last Contact", key: "lastContact" }].map(f => (
+            <div key={f.key}>
+              <label className="text-sm font-medium block mb-1">{f.label}</label>
+              <input value={String((form as unknown as Record<string, string>)[f.key] ?? "")} onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
+            </div>
+          ))}
+          <div>
+            <label className="text-sm font-medium block mb-1">Status</label>
+            <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as Status })}
+              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
+              {["Active", "Pending", "On Hold", "Cancelled"].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-medium block mb-1">Notes</label>
+            <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
+              rows={3}
+              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring resize-none" />
+          </div>
+        </div>
+        <div className="flex gap-2 mt-5">
+          <button onClick={onClose} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
+          <button onClick={() => onSave(form)} className="flex-1 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 // ─── CONTACT DETAIL ───────────────────────────────────────────────────────────
 
-function ContactDetailPage({ contact: init, onBack, toast }: { contact: Contact; onBack: () => void; toast: (msg: string, type?: Toast["type"]) => void }) {
-  const [contact, setContact] = useState(init);
+function ContactDetailPage({ contact: init, contacts, setContacts, clients, onBack, toast }: { contact: Contact; contacts: Contact[]; setContacts: (c: Contact[]) => void; clients: Client[]; onBack: () => void; toast: (msg: string, type?: Toast["type"]) => void }) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleted, setDeleted] = useState(false);
   const [form, setForm] = useState(init);
+  const contact = contacts.find((item) => item.id === init.id) || init;
+
+  function clientIdForCompany(company: string) {
+    return clients.find((client) => client.company === company)?.id ?? "";
+  }
+
+  async function saveEditWith(contactToSave: Contact = form) {
+    try {
+      const response = await fetch(`/api/contacts/${contactToSave.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          ...contactToSave,
+          clientId: clientIdForCompany(contactToSave.company),
+        }),
+      });
+
+      const data = await readApiJson(response, `/api/contacts/${contactToSave.id}`);
+
+      if (!response.ok) {
+        throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to update contact."));
+      }
+
+      const savedContact = normalizeContact({ ...contactToSave, ...asRecord(itemFromApi(data, "contact")) });
+      setContacts(contacts.map(c => c.id === savedContact.id ? savedContact : c));
+      setForm(savedContact);
+      setEditOpen(false);
+      toast("Contact updated in the database.");
+    } catch (error) {
+      console.error("Update contact detail error:", error);
+      toast(error instanceof Error ? error.message : "Failed to update contact.", "error");
+    }
+  }
+
+  async function deleteContact() {
+    try {
+      const response = await fetch(`/api/contacts/${contact.id}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+      });
+
+      const data = await readApiJson(response, `/api/contacts/${contact.id}`);
+
+      if (!response.ok) {
+        throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to delete contact."));
+      }
+
+      setContacts(contacts.filter(c => c.id !== contact.id));
+      setDeleted(true);
+      setDeleteOpen(false);
+      toast("Contact deleted from the database.", "info");
+    } catch (error) {
+      console.error("Delete contact detail error:", error);
+      toast(error instanceof Error ? error.message : "Failed to delete contact.", "error");
+    }
+  }
 
   if (deleted) return (
     <div className="flex flex-col items-center justify-center h-64 space-y-4">
@@ -1715,7 +2321,7 @@ function ContactDetailPage({ contact: init, onBack, toast }: { contact: Contact;
       <div className="flex items-center gap-3 flex-wrap">
         <BackButton onClick={onBack} label="Back to Contacts" />
         <div className="h-4 w-px bg-border" />
-        <div><h1 className="text-2xl font-bold">{contact.name}</h1><p className="text-muted-foreground text-sm">{contact.role} — {contact.company}</p></div>
+        <div><h1 className="text-2xl font-bold">{contact.name}</h1><p className="text-muted-foreground text-sm">{contact.role || "Contact"} — {contact.company}</p></div>
         <div className="ml-auto flex gap-2">
           <button onClick={() => { setForm(contact); setEditOpen(true); }} className="flex items-center gap-2 px-3 py-2 border border-border rounded-md text-sm hover:bg-accent transition-colors">
             <Edit2 className="w-3.5 h-3.5" /> Edit
@@ -1730,10 +2336,10 @@ function ContactDetailPage({ contact: init, onBack, toast }: { contact: Contact;
           <div className="bg-card border border-border rounded-xl p-5">
             <h2 className="font-semibold mb-4">Contact Details</h2>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-              {[{ label: "Full Name", value: contact.name }, { label: "Company", value: contact.company }, { label: "Role", value: contact.role }, { label: "Last Contact", value: contact.lastContact }].map(item => (
+              {[{ label: "Full Name", value: contact.name }, { label: "Company", value: contact.company }, { label: "Role", value: contact.role || "—" }, { label: "Last Contact", value: contact.lastContact || "—" }].map(item => (
                 <div key={item.label}><dt className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-0.5">{item.label}</dt><dd className="font-medium">{item.value}</dd></div>
               ))}
-              <div className="col-span-2"><dt className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-0.5">Notes</dt><dd className="text-muted-foreground">{contact.notes}</dd></div>
+              <div className="col-span-2"><dt className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-0.5">Notes</dt><dd className="text-muted-foreground">{contact.notes || "—"}</dd></div>
             </dl>
           </div>
           <div className="bg-card border border-border rounded-xl p-5">
@@ -1748,14 +2354,14 @@ function ContactDetailPage({ contact: init, onBack, toast }: { contact: Contact;
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-muted-foreground">
               <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5" />{contact.email}</p>
-              <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5" />{contact.phone}</p>
+              <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5" />{contact.phone || "—"}</p>
             </div>
           </div>
         </div>
         <div>
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <StatusBadge status={contact.status} />
-            {[{ label: "Email", value: contact.email }, { label: "Phone", value: contact.phone }, { label: "Last Contact", value: contact.lastContact }].map(item => (
+            {[{ label: "Email", value: contact.email }, { label: "Phone", value: contact.phone || "—" }, { label: "Last Contact", value: contact.lastContact || "—" }].map(item => (
               <div key={item.label} className="border-t border-border pt-3">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">{item.label}</p>
                 <p className="text-sm font-medium">{item.value}</p>
@@ -1766,37 +2372,17 @@ function ContactDetailPage({ contact: init, onBack, toast }: { contact: Contact;
       </div>
 
       {editOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-bold text-lg">Edit Contact</h2>
-              <button onClick={() => setEditOpen(false)} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="space-y-3">
-              {[{ label: "Full Name", key: "name" }, { label: "Role", key: "role" }, { label: "Email", key: "email" }, { label: "Phone", key: "phone" }, { label: "Notes", key: "notes" }].map(f => (
-                <div key={f.key}>
-                  <label className="text-sm font-medium block mb-1">{f.label}</label>
-                  <input value={(form as any)[f.key]} onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-                    className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2 mt-5">
-              <button onClick={() => setEditOpen(false)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
-              <button onClick={() => { setContact(form); setEditOpen(false); toast("Contact updated."); }} className="flex-1 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Save</button>
-            </div>
-          </div>
-        </div>
+        <EditContactModal contact={form} clients={clients} onClose={() => setEditOpen(false)} onSave={(updated) => { setForm(updated); void saveEditWith(updated); }} />
       )}
       {deleteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl">
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
             <h2 className="font-bold text-lg mb-1">Delete contact?</h2>
-            <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{contact.name}</strong>.</p>
+            <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{contact.name}</strong> from the database.</p>
             <div className="flex gap-2">
               <button onClick={() => setDeleteOpen(false)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
-              <button onClick={() => { setDeleted(true); setDeleteOpen(false); toast("Contact deleted.", "info"); }} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
+              <button onClick={deleteContact} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
             </div>
           </div>
         </div>
@@ -2127,8 +2713,15 @@ function ContractsPage({ contracts, clients, contacts, setContracts, onDetail, t
   const overdue = contracts.filter(c => c.daysLeft < 0 && c.status !== "Cancelled" && c.status !== "Renewed").length;
   const onHold = contracts.filter(c => c.status === "On Hold").length;
 
+  const searchText = search.toLowerCase();
+
   const filtered = contracts.filter(c => {
-    if (search && !c.name.toLowerCase().includes(search.toLowerCase()) && !c.client.toLowerCase().includes(search.toLowerCase()) && !c.reference.toLowerCase().includes(search.toLowerCase())) return false;
+    if (
+      search &&
+      !String(c.name ?? "").toLowerCase().includes(searchText) &&
+      !String(c.client ?? "").toLowerCase().includes(searchText) &&
+      !String(c.reference ?? "").toLowerCase().includes(searchText)
+    ) return false;
     if (filterStatus !== "All Statuses" && c.status !== filterStatus) return false;
     if (filterClient !== "All Clients" && c.client !== filterClient) return false;
     if (filterType !== "All Contract Types" && c.contractType !== filterType) return false;
@@ -2137,22 +2730,56 @@ function ContractsPage({ contracts, clients, contacts, setContracts, onDetail, t
   });
 
 async function handleAdd(c: Contract) {
+  const contractName = String(c.name ?? "").trim();
+
+  if (!contractName) {
+    toast("Contract name is missing before sending to the database.", "error");
+    return;
+  }
+
   try {
+    const payload = {
+      ...c,
+      name: contractName,
+      contractName,
+      contractType: c.contractType || "Service",
+      type: c.contractType || "Service",
+      amount: c.amount || 0,
+      value: c.amount || 0,
+      clientId: c.clientId,
+      client: c.client,
+    };
+
+    console.log("CREATE CONTRACT PAYLOAD:", payload);
+
     const response = await fetch("/api/contracts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
-      body: JSON.stringify(c),
+      body: JSON.stringify(payload),
     });
 
     const data = await readApiJson(response, "/api/contracts");
 
-    if (!response.ok || !data.success) {
-      throw new Error(data.message || "Failed to create contract.");
+    if (!response.ok) {
+      throw new Error(
+        stringValue(
+          asRecord(data).message ?? asRecord(data).error,
+          "Failed to create contract.",
+        ),
+      );
     }
 
-    setContracts([data.contract as Contract, ...contracts]);
+    const savedContract = normalizeContract({
+      ...c,
+      ...asRecord(itemFromApi(data, "contract")),
+      name: contractName,
+      contractName,
+    });
+
+    setContracts([savedContract, ...contracts]);
     setAddOpen(false);
 
     toast("Contract created successfully.");
@@ -2161,14 +2788,30 @@ async function handleAdd(c: Contract) {
 
     toast(
       error instanceof Error ? error.message : "Failed to create contract.",
-      "error"
+      "error",
     );
   }
 }
 
-  function handleDelete(id: string) {
-    setContracts(contracts.filter(c => c.id !== id));
-    toast("Contract deleted.", "info");
+  async function handleDelete(id: string) {
+    try {
+      const response = await fetch(`/api/contracts/${id}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+      });
+
+      const data = await readApiJson(response, `/api/contracts/${id}`);
+
+      if (!response.ok) {
+        throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to delete contract."));
+      }
+
+      setContracts(contracts.filter(c => c.id !== id));
+      toast("Contract deleted from the database.", "info");
+    } catch (error) {
+      console.error("Delete contract error:", error);
+      toast(error instanceof Error ? error.message : "Failed to delete contract.", "error");
+    }
   }
 
   return (
@@ -2191,7 +2834,7 @@ async function handleAdd(c: Contract) {
           { label: "Overdue Contracts", value: overdue, crit: overdue > 0 },
           { label: "On Hold", value: onHold },
         ].map(s => (
-          <div key={s.label} className={cn("bg-card border rounded-xl p-4", s.crit ? "border-red-400/50" : (s as any).warn ? "border-amber-400/50" : "border-border")}>
+          <div key={s.label} className={cn("bg-card border rounded-xl p-4", s.crit ? "border-red-400/50" : (s as { warn?: boolean }).warn ? "border-amber-400/50" : "border-border")}>
             <p className="text-2xl font-bold">{s.value}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
           </div>
@@ -2200,7 +2843,7 @@ async function handleAdd(c: Contract) {
 
       <div className="flex border-b border-border">
         {[{ key: "list", label: "Contracts Lists", icon: FileText }, { key: "calendar", label: "Renewal Calendar", icon: CalendarDays }].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key as any)}
+          <button key={t.key} onClick={() => setTab(t.key as "list" | "calendar")}
             className={cn("flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors",
               tab === t.key ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
             <t.icon className="w-4 h-4" /> {t.label}
@@ -2264,7 +2907,7 @@ async function handleAdd(c: Contract) {
                           <button onClick={() => onDetail(c)} className="px-2.5 py-1 border border-border rounded text-xs hover:bg-accent transition-colors font-medium whitespace-nowrap">
                             View Renewal
                           </button>
-                          <button onClick={() => handleDelete(c.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors">
+                          <button onClick={() => handleDelete(c.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors" title="Delete">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -2301,49 +2944,103 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
   const [editForm, setEditForm] = useState(contract);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  function updateContract(updated: Contract) {
-    setContracts(contracts.map(c => c.id === updated.id ? updated : c));
+  async function persistContract(updated: Contract, message: string) {
+    try {
+      const response = await fetch(`/api/contracts/${updated.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(updated),
+      });
+
+      const data = await readApiJson(response, `/api/contracts/${updated.id}`);
+
+      if (!response.ok) {
+        throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to update contract."));
+      }
+
+      const savedContract = normalizeContract({
+        ...updated,
+        ...asRecord(itemFromApi(data, "contract")),
+      });
+
+      setContracts(contracts.map(c => c.id === savedContract.id ? savedContract : c));
+      toast(message);
+      return savedContract;
+    } catch (error) {
+      console.error("Update contract error:", error);
+      toast(error instanceof Error ? error.message : "Failed to update contract.", "error");
+      return null;
+    }
   }
 
   function markRenewed() {
-    updateContract({ ...contract, status: "Renewed" as Status });
-    toast("Contract marked as renewed.");
+    void persistContract({ ...contract, status: "Renewed" as Status }, "Contract marked as renewed in the database.");
   }
 
   function markOverdue() {
-    updateContract({ ...contract, status: "Overdue" as Status });
-    toast("Contract marked as overdue.", "info");
+    void persistContract({ ...contract, status: "Overdue" as Status }, "Contract marked as overdue in the database.");
   }
 
   function markCancelled() {
-    updateContract({ ...contract, status: "Cancelled" as Status });
-    toast("Contract marked as cancelled.", "info");
+    void persistContract({ ...contract, status: "Cancelled" as Status }, "Contract marked as cancelled in the database.");
   }
 
-  function addNote() {
+  async function addNote() {
     if (!noteInput.trim()) return;
     const now = new Date();
     const timestamp = now.toLocaleDateString("en-MU", { day: "2-digit", month: "short", year: "numeric" }) +
       " " + now.toLocaleTimeString("en-MU", { hour: "2-digit", minute: "2-digit" });
     const newNote = `${noteInput.trim()} — Staff Member | ${timestamp}`;
-    updateContract({ ...contract, notes: [...contract.notes, newNote] });
-    setNoteInput("");
-    toast("Note added.");
+    const updated = {
+      ...contract,
+      notes: [...(Array.isArray(contract.notes) ? contract.notes : []), newNote],
+    };
+
+    const saved = await persistContract(updated, "Note added to the database.");
+    if (saved) setNoteInput("");
   }
 
-  function saveEdit() {
-    updateContract({ ...editForm, daysLeft: editForm.renewalDate ? calcDaysLeft(editForm.renewalDate) : contract.daysLeft });
-    setEditOpen(false);
-    toast("Contract updated.");
+  async function saveEdit() {
+    const updated = {
+      ...editForm,
+      daysLeft: editForm.renewalDate ? calcDaysLeft(editForm.renewalDate) : contract.daysLeft,
+    };
+
+    const saved = await persistContract(updated, "Contract updated in the database.");
+    if (saved) setEditOpen(false);
   }
 
-  function deleteContract() {
-    setContracts(contracts.filter(c => c.id !== contract.id));
-    onBack();
-    toast("Contract deleted.", "info");
+  async function deleteContract() {
+    try {
+      const response = await fetch(`/api/contracts/${contract.id}`, {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      const data = await readApiJson(response, `/api/contracts/${contract.id}`);
+
+      if (!response.ok) {
+        throw new Error(stringValue(asRecord(data).message ?? asRecord(data).error, "Failed to delete contract."));
+      }
+
+      setContracts(contracts.filter(c => c.id !== contract.id));
+      setDeleteOpen(false);
+      onBack();
+      toast("Contract deleted from the database.", "info");
+    } catch (error) {
+      console.error("Delete contract error:", error);
+      toast(error instanceof Error ? error.message : "Failed to delete contract.", "error");
+    }
   }
 
   const clientContact = contacts.find(c => c.company === contract.client);
+  const contractNotes = Array.isArray(contract.notes) ? contract.notes : [];
+  const contractReminders = Array.isArray(contract.reminders) ? [...contract.reminders] : [];
 
   return (
     <div className="space-y-6">
@@ -2356,9 +3053,7 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
         </div>
       </div>
 
-      {/* Contract info card */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        {/* Action bar */}
         <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-b border-border bg-muted/30">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mr-1">Actions</span>
           <button onClick={markRenewed} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-md text-xs font-semibold hover:opacity-90 transition-all">
@@ -2380,7 +3075,6 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
           </div>
         </div>
 
-        {/* Info grid */}
         <div className="p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-5 text-sm">
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Client</p>
@@ -2457,10 +3151,10 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
           <div className="relative">
             <div className="absolute left-3.5 top-0 bottom-0 w-px bg-border" />
             <div className="space-y-5">
-              {contract.reminders.sort((a, b) => b.days - a.days).map((r, i) => {
+              {contractReminders.sort((a, b) => b.days - a.days).map((r, i) => {
                 const label = r.days === 0 ? "Renewal Date" : `${r.days} days before`;
                 return (
-                  <div key={i} className="flex items-center gap-4 relative">
+                  <div key={`${r.days}-${i}`} className="flex items-center gap-4 relative">
                     <div className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0 z-10 border-2",
                       r.sent ? "bg-foreground border-foreground" : "bg-background border-border")}>
                       {r.sent ? <Check className="w-3 h-3 text-background" /> : <Clock className="w-3 h-3 text-muted-foreground" />}
@@ -2475,6 +3169,7 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
                   </div>
                 );
               })}
+              {contractReminders.length === 0 && <p className="text-sm text-muted-foreground">No reminders set.</p>}
             </div>
           </div>
         </div>
@@ -2482,8 +3177,8 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
         <div className="bg-card border border-border rounded-xl p-5 flex flex-col">
           <h2 className="font-semibold mb-4 flex items-center gap-2"><MessageSquare className="w-4 h-4" /> Internal Notes</h2>
           <div className="flex-1 space-y-3 mb-4 max-h-48 overflow-y-auto">
-            {contract.notes.length === 0 && <p className="text-sm text-muted-foreground">No notes yet.</p>}
-            {contract.notes.map((note, i) => {
+            {contractNotes.length === 0 && <p className="text-sm text-muted-foreground">No notes yet.</p>}
+            {contractNotes.map((note, i) => {
               const [text, meta] = note.split(" — ");
               return (
                 <div key={i} className="bg-muted/50 rounded-lg p-3 text-sm">
@@ -2495,9 +3190,9 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
           </div>
           <div className="flex gap-2 mt-auto">
             <input value={noteInput} onChange={e => setNoteInput(e.target.value)} placeholder="Add an internal note…"
-              onKeyDown={e => e.key === "Enter" && addNote()}
+              onKeyDown={e => { if (e.key === "Enter") void addNote(); }}
               className="flex-1 px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
-            <button onClick={addNote} className="px-3 py-2 bg-foreground text-background rounded-md text-sm font-semibold hover:opacity-90">
+            <button onClick={() => void addNote()} className="px-3 py-2 bg-foreground text-background rounded-md text-sm font-semibold hover:opacity-90">
               <Plus className="w-4 h-4" />
             </button>
           </div>
@@ -2516,7 +3211,7 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {contract.reminders.filter(r => r.sent).map((r, i) => (
+              {contractReminders.filter(r => r.sent).map((r, i) => (
                 <tr key={i} className="hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{r.scheduledDate || "—"}</td>
                   <td className="px-4 py-2.5">{r.days === 0 ? "Renewal Date" : `${r.days}-Day Reminder`}</td>
@@ -2525,7 +3220,7 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
                   <td className="px-4 py-2.5"><button className="text-xs text-muted-foreground hover:text-foreground hover:underline transition-colors">View</button></td>
                 </tr>
               ))}
-              {!contract.reminders.some(r => r.sent) && (
+              {!contractReminders.some(r => r.sent) && (
                 <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-muted-foreground">No emails sent yet</td></tr>
               )}
             </tbody>
@@ -2551,20 +3246,49 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
               {[{ label: "Contract Name", key: "name" }, { label: "Reference", key: "reference" }, { label: "Notice Period", key: "noticePeriod" }].map(f => (
                 <div key={f.key}>
                   <label className="text-sm font-medium block mb-1">{f.label}</label>
-                  <input value={(editForm as any)[f.key]} onChange={e => setEditForm({ ...editForm, [f.key]: e.target.value })}
+                  <input value={String((editForm as unknown as Record<string, string | number>)[f.key] ?? "")} onChange={e => setEditForm({ ...editForm, [f.key]: e.target.value })}
                     className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
                 </div>
               ))}
+              <div>
+                <label className="text-sm font-medium block mb-1">Service Description</label>
+                <textarea value={editForm.serviceDescription} onChange={e => setEditForm({ ...editForm, serviceDescription: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring resize-none" />
+              </div>
               <div>
                 <label className="text-sm font-medium block mb-1">Renewal Date</label>
                 <input type="date" value={editForm.renewalDate} onChange={e => setEditForm({ ...editForm, renewalDate: e.target.value })}
                   className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium block mb-1">Amount</label>
+                  <input value={editForm.amount} onChange={e => setEditForm({ ...editForm, amount: Number(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-1">Currency</label>
+                  <select value={editForm.currency} onChange={e => setEditForm({ ...editForm, currency: e.target.value })}
+                    className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
+                    {CURRENCIES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1">Contract Type</label>
+                <select value={editForm.contractType} onChange={e => setEditForm({ ...editForm, contractType: e.target.value })}
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
+                  {CONTRACT_TYPES.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
               <div>
                 <label className="text-sm font-medium block mb-1">Assigned Staff</label>
                 <select value={editForm.assignedTo} onChange={e => setEditForm({ ...editForm, assignedTo: e.target.value })}
                   className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
+                  <option value="">— Select assigned staff —</option>
                   {STAFF_MEMBERS.map(s => <option key={s}>{s}</option>)}
+                  {contacts.map(c => <option key={c.id} value={c.name}>{c.name} · {c.company}</option>)}
                 </select>
               </div>
               <div>
@@ -2577,7 +3301,7 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
             </div>
             <div className="flex gap-2 mt-5">
               <button onClick={() => setEditOpen(false)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
-              <button onClick={saveEdit} className="flex-1 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Save Changes</button>
+              <button onClick={() => void saveEdit()} className="flex-1 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Save Changes</button>
             </div>
           </div>
         </div>
@@ -2588,10 +3312,10 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
           <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl">
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
             <h2 className="font-bold text-lg mb-1">Delete contract?</h2>
-            <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{contract.name}</strong>.</p>
+            <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{contract.name}</strong> from the database.</p>
             <div className="flex gap-2">
               <button onClick={() => setDeleteOpen(false)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
-              <button onClick={deleteContract} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
+              <button onClick={() => void deleteContract()} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
             </div>
           </div>
         </div>
@@ -3194,25 +3918,8 @@ useEffect(() => {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
-
       const clientsData = await readApiJson(clientsResponse, "/api/clients");
-
-      const rawClients = Array.isArray(clientsData)
-        ? clientsData
-        : Array.isArray(clientsData?.clients)
-          ? clientsData.clients
-          : [];
-
-      const formattedClients = rawClients.map((client) => ({
-        ...client,
-        company: client.company ?? client.companyName ?? "Unnamed Client",
-        contact: client.contact ?? client.contacts?.[0]?.name ?? "No contact",
-        email: client.email ?? client.contacts?.[0]?.email ?? "",
-        phone: client.phone ?? client.contacts?.[0]?.phone ?? "",
-        contracts: client.contracts ?? [],
-      }));
-
-      setClients(formattedClients);
+      setClients(listFromApi(clientsData, "clients").map(normalizeClient));
     } catch (error) {
       console.error("Failed to load clients:", error);
     }
@@ -3222,16 +3929,8 @@ useEffect(() => {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
-
       const contactsData = await readApiJson(contactsResponse, "/api/contacts");
-
-      const rawContacts = Array.isArray(contactsData)
-        ? contactsData
-        : Array.isArray(contactsData?.contacts)
-          ? contactsData.contacts
-          : [];
-
-      setContacts(rawContacts);
+      setContacts(listFromApi(contactsData, "contacts").map(normalizeContact));
     } catch (error) {
       console.error("Failed to load contacts:", error);
     }
@@ -3241,25 +3940,16 @@ useEffect(() => {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
-
-      const contractsData = await readApiJson(
-        contractsResponse,
-        "/api/contracts",
-      );
-
-      const rawContracts = Array.isArray(contractsData)
-        ? contractsData
-        : Array.isArray(contractsData?.contracts)
-          ? contractsData.contracts
-          : [];
-
-      setContracts(rawContracts);
+      const contractsData = await readApiJson(contractsResponse, "/api/contracts");
+      setContracts(listFromApi(contractsData, "contracts").map(normalizeContract));
     } catch (error) {
       console.error("Failed to load contracts:", error);
     }
   }
 
   loadDatabaseData();
+  const interval = window.setInterval(loadDatabaseData, 5000);
+  return () => window.clearInterval(interval);
 }, []);
   useEffect(() => { const t = setTimeout(() => setLoading(false), 2400); return () => clearTimeout(t); }, []);
   useEffect(() => { if (!searchQuery) setSearchOpen(false); else setSearchOpen(true); }, [searchQuery]);
@@ -3398,7 +4088,7 @@ if (!isSignedIn) {
                   />
                 )}
                 {page === "contact-detail" && selectedContact && (
-                  <ContactDetailPage contact={selectedContact} onBack={() => navigate("contacts")} toast={addToast} />
+                  <ContactDetailPage contact={selectedContact} contacts={contacts} setContacts={setContacts} clients={clients} onBack={() => navigate("contacts")} toast={addToast} />
                 )}
                 {page === "contracts" && (
                   <ContractsPage
