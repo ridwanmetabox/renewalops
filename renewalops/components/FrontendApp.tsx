@@ -74,6 +74,12 @@ interface Notification {
   detail?: string;
 }
 
+type NotificationOverride = {
+  read?: boolean;
+  archived?: boolean;
+  deleted?: boolean;
+};
+
 interface Toast { id: string; message: string; type: "success" | "error" | "info"; }
 
 // ─── Mock Data (Mauritius) ────────────────────────────────────────────────────
@@ -423,6 +429,80 @@ function normalizeContract(raw: unknown): Contract {
       : [],
     notes,
   };
+}
+function buildNotificationsFromContracts(
+  contracts: Contract[],
+  overrides: Record<string, NotificationOverride>,
+): Notification[] {
+  return contracts
+    .filter((contract) => {
+      return (
+        contract.status !== "Cancelled" &&
+        contract.status !== "Renewed" &&
+        contract.status !== "On Hold"
+      );
+    })
+    .flatMap((contract) => {
+      const notifications: Notification[] = [];
+
+      const reference =
+        contract.reference && contract.reference !== "—"
+          ? ` (${contract.reference})`
+          : "";
+
+      if (contract.daysLeft < 0 || contract.status === "Overdue") {
+        notifications.push({
+          id: `contract-${contract.id}-overdue`,
+          title: `Contract Overdue — ${contract.client}`,
+          message: `${contract.name}${reference} was due on ${contract.renewalDate}. Immediate action required.`,
+          time: "Auto-generated",
+          read: false,
+          archived: false,
+          type: "overdue",
+          detail: `${contract.name}${reference} for ${contract.client} is overdue by ${Math.abs(
+            contract.daysLeft,
+          )} day${Math.abs(contract.daysLeft) === 1 ? "" : "s"}. Renewal date was ${
+            contract.renewalDate
+          }. Assigned staff: ${contract.assignedTo || "Not assigned"}.`,
+        });
+      } else if (contract.daysLeft <= 30 || contract.status === "Due Soon") {
+        notifications.push({
+          id: `contract-${contract.id}-due-soon`,
+          title:
+            contract.daysLeft === 0
+              ? `Due Today — ${contract.client}`
+              : `Due Soon — ${contract.client}`,
+          message:
+            contract.daysLeft === 0
+              ? `${contract.name}${reference} is due today.`
+              : `${contract.name}${reference} is due in ${contract.daysLeft} day${
+                  contract.daysLeft === 1 ? "" : "s"
+                } (${contract.renewalDate}).`,
+          time: "Auto-generated",
+          read: false,
+          archived: false,
+          type: "renewal",
+          detail: `${contract.name}${reference} for ${contract.client} renews on ${
+            contract.renewalDate
+          }. Value: ${fmtCurrency(contract.amount, contract.currency)}. Assigned staff: ${
+            contract.assignedTo || "Not assigned"
+          }.`,
+        });
+      }
+
+      return notifications;
+    })
+    .map((notification) => {
+      const override = overrides[notification.id];
+
+      return {
+        ...notification,
+        read: override?.read ?? notification.read,
+        archived: override?.archived ?? notification.archived,
+        deleted: override?.deleted,
+      } as Notification & { deleted?: boolean };
+    })
+    .filter((notification) => !notification.deleted);
 }
 
 function statusColor(status: Status): string {
@@ -3932,7 +4012,9 @@ export default function App() {
   const [clients, setClients] = useState<Client[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>(INIT_NOTIFICATIONS);
+  const [notificationOverrides, setNotificationOverrides] = useState<
+  Record<string, NotificationOverride>
+>({});
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
@@ -3947,10 +4029,47 @@ export default function App() {
   phone: "+230 5XXX XXXX",
   role: "Administrator",
 });
-  const { toasts, add: addToast, remove: removeToast } = useToast();
+ const { toasts, add: addToast, remove: removeToast } = useToast();
 
-  const unreadCount = notifications.filter(n => !n.read && !n.archived).length;
+const notifications = buildNotificationsFromContracts(
+  contracts,
+  notificationOverrides,
+);
 
+const unreadCount = notifications.filter(
+  (notification) => !notification.read && !notification.archived,
+).length;
+
+const setGeneratedNotifications = useCallback(
+  (updatedNotifications: Notification[]) => {
+    setNotificationOverrides((previous) => {
+      const next = { ...previous };
+      const updatedIds = new Set(
+        updatedNotifications.map((notification) => notification.id),
+      );
+
+      for (const notification of updatedNotifications) {
+        next[notification.id] = {
+          ...next[notification.id],
+          read: notification.read,
+          archived: notification.archived,
+        };
+      }
+
+      for (const notification of notifications) {
+        if (!updatedIds.has(notification.id)) {
+          next[notification.id] = {
+            ...next[notification.id],
+            deleted: true,
+          };
+        }
+      }
+
+      return next;
+    });
+  },
+  [notifications],
+);
 useEffect(() => {
   async function loadDatabaseData() {
     try {
@@ -4163,7 +4282,12 @@ if (!isSignedIn) {
 />
                 )}
                 {page === "admin" && <AdminPage toast={addToast} profile={userProfile} setProfile={setUserProfile} />}
-                {page === "notifications" && <NotificationsPage notifications={notifications} setNotifications={setNotifications} />}
+                {page === "notifications" && (
+  <NotificationsPage
+    notifications={notifications}
+    setNotifications={setGeneratedNotifications}
+  />
+)}
               </PageWrapper>
             </div>
           </main>
