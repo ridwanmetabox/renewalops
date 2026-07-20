@@ -10,7 +10,7 @@ import {
   X, Check, AlertTriangle, FileText, HelpCircle, Building, Lock, Sliders,
   ChevronDown, ChevronUp, Archive, LogOut, User, RefreshCw, Download,
   CheckCircle, XCircle, Calendar, MessageSquare, Clock, CalendarDays,
-  ArrowLeft, Sun, Moon, RotateCcw, Ban
+  ArrowLeft, Sun, Moon, RotateCcw, Ban, Menu
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -237,7 +237,7 @@ type DatabaseContract = {
   recipientTypes?: string[] | null;
   notes?: string[] | null;
   contractValue?: number | string | null;
-autoRenewal?: boolean | null;
+  autoRenewal?: boolean | null;
 };
 
 function asRecord(value: unknown): ApiRecord {
@@ -571,7 +571,7 @@ function RenewalOpsLogo({ size = "md", showText = true, className = "" }: {
 
 function ToastContainer({ toasts, remove }: { toasts: Toast[]; remove: (id: string) => void }) {
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
+    <div className="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-6 sm:bottom-6 z-[100] flex flex-col gap-2 pointer-events-none">
       {toasts.map(t => (
         <div key={t.id}
           className={cn(
@@ -701,7 +701,7 @@ function LoginAnimation() {
 // ─── Shared Components ────────────────────────────────────────────────────────
 
 function PageWrapper({ children, pageKey }: { children: React.ReactNode; pageKey: string }) {
-  return <div key={pageKey} className="page-enter min-h-full">{children}</div>;
+  return <div key={pageKey} className="page-enter min-h-full min-w-0">{children}</div>;
 }
 
 function BackButton({ onClick, label = "Back" }: { onClick: () => void; label?: string }) {
@@ -778,9 +778,9 @@ function LoginPage() {
       </div>
 
       {/* Right panel */}
-      <div className="flex-1 flex items-center justify-center px-8 py-12">
+      <div className="flex-1 flex items-center justify-center px-4 sm:px-8 py-10 sm:py-12">
         <div className="w-full max-w-sm">
-          <div className="mb-[100px] flex justify-end pr-[110px]">
+          <div className="mb-10 sm:mb-[100px] flex justify-center sm:justify-end sm:pr-[110px]">
             <RenewalOpsLogo size="md" />
           </div>
 
@@ -823,7 +823,7 @@ function SignupPage({ onBack, onSignup }: { onBack: () => void; onSignup: () => 
         </div>
         <p className="relative z-10 text-xs text-background/20">© 2026 RenewalOps — Mauritius</p>
       </div>
-      <div className="flex-1 flex items-center justify-center px-8 py-12">
+      <div className="flex-1 flex items-center justify-center px-4 sm:px-8 py-10 sm:py-12">
         <div className="w-full max-w-sm">
           <div className="mb-6 flex justify-end"><RenewalOpsLogo size="md" /></div>
           <div className="mb-6"><BackButton onClick={onBack} label="Back to Login" /></div>
@@ -886,11 +886,15 @@ function Sidebar({
   onNav,
   onSignOut,
   userProfile,
+  mobileOpen,
+  onClose,
 }: {
   current: Page;
   onNav: (p: Page) => void;
   onSignOut: () => void;
   userProfile: { name: string; email: string; phone: string; role: string };
+  mobileOpen: boolean;
+  onClose: () => void;
 }) {
   const isActive = (page: Page) => {
     if (page === "clients") return current === "clients" || current === "client-detail";
@@ -899,72 +903,113 @@ function Sidebar({
     if (page === "settings") return current === "settings" || current.startsWith("settings-");
     return current === page;
   };
-    const initials =
+
+  const initials =
     userProfile.name
       .split(" ")
       .map((word) => word[0])
       .join("")
       .slice(0, 2)
       .toUpperCase() || "U";
+
+  function navTo(page: Page) {
+    onNav(page);
+    onClose();
+  }
+
   return (
-    <aside className="fixed left-0 top-0 h-screen w-60 bg-sidebar border-r border-border flex flex-col z-30">
-      <div className="h-16 flex items-center px-4 border-b border-border gap-3">
-        <div className="relative shrink-0 flex items-center justify-center w-9 h-9">
-          <div className="absolute inset-0 rounded-md border border-foreground/25"
-            style={{ animation: "logoRing 3s ease-in-out infinite" }} />
-          <div className="absolute inset-0 rounded-md border border-foreground/10"
-            style={{ animation: "logoRing 3s 1.5s ease-in-out infinite" }} />
-          <LogoMark size={22} className="text-foreground relative z-10" />
-        </div>
-        <div className="leading-none select-none">
-          <div className="font-black tracking-tight uppercase text-sm">RENEWALOPS</div>
-          <div className="font-medium tracking-[0.12em] text-muted-foreground uppercase text-[9px]">Since 2026</div>
-        </div>
-      </div>
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ icon: Icon, label, page }) => (
-          <button key={page} onClick={() => onNav(page)}
-            className={cn(
-              "w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-              isActive(page) ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-            )}>
-            <Icon className="w-4 h-4" /> {label}
-          </button>
-        ))}
-      </nav>
-            <div className="px-3 py-4 border-t border-border">
-        <div className="rounded-xl border border-border bg-card p-3">
-          <button
-            onClick={() => onNav("admin")}
-            className="w-full flex items-center gap-3 text-left rounded-lg hover:bg-accent transition-colors p-2"
-          >
-            <div className="w-9 h-9 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold shrink-0">
-              {initials}
-            </div>
+    <>
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close sidebar overlay"
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm xl:hidden"
+        />
+      )}
+<aside
+        className={cn(
+          "fixed left-0 top-0 z-50 flex h-[100dvh] w-[min(16rem,85vw)] xl:w-60 flex-col bg-sidebar border-r border-border shadow-2xl xl:shadow-none",
+          "transition-transform duration-200 ease-out will-change-transform",
+          "xl:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <div className="h-16 flex items-center px-4 border-b border-border gap-3">
+          <div className="relative shrink-0 flex items-center justify-center w-9 h-9">
+            <div
+              className="absolute inset-0 rounded-md border border-foreground/25"
+              style={{ animation: "logoRing 3s ease-in-out infinite" }}
+            />
+            <div
+              className="absolute inset-0 rounded-md border border-foreground/10"
+              style={{ animation: "logoRing 3s 1.5s ease-in-out infinite" }}
+            />
+            <LogoMark size={22} className="text-foreground relative z-10" />
+          </div>
 
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold truncate">
-                {userProfile.name}
-              </p>
-              <p className="text-[11px] text-muted-foreground truncate">
-                {userProfile.email}
-              </p>
-              <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-                {userProfile.role}
-              </p>
+          <div className="leading-none select-none min-w-0">
+            <div className="font-black tracking-tight uppercase text-sm">RENEWALOPS</div>
+            <div className="font-medium tracking-[0.12em] text-muted-foreground uppercase text-[9px]">
+              Since 2026
             </div>
-          </button>
+          </div>
 
           <button
-            onClick={onSignOut}
-            className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs font-semibold text-red-500 hover:bg-red-500/10 transition-colors"
+            onClick={onClose}
+            className="ml-auto p-1.5 rounded-md hover:bg-accent text-muted-foreground xl:hidden"
+            aria-label="Close menu"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            Sign Out
+            <X className="w-4 h-4" />
           </button>
         </div>
-      </div>
-    </aside>
+
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {NAV_ITEMS.map(({ icon: Icon, label, page }) => (
+            <button
+              key={page}
+              onClick={() => navTo(page)}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
+                isActive(page)
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="px-3 py-4 border-t border-border">
+          <div className="rounded-xl border border-border bg-card p-3">
+            <button
+              onClick={() => navTo("admin")}
+              className="w-full flex items-center gap-3 text-left rounded-lg hover:bg-accent transition-colors p-2"
+            >
+              <div className="w-9 h-9 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold shrink-0">
+                {initials}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold truncate">{userProfile.name}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{userProfile.email}</p>
+                <p className="text-[10px] text-muted-foreground truncate mt-0.5">{userProfile.role}</p>
+              </div>
+            </button>
+
+            <button
+              onClick={onSignOut}
+              className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs font-semibold text-red-500 hover:bg-red-500/10 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -978,6 +1023,7 @@ function TopBar({
   notifCount,
   onAdmin,
   userProfile,
+  onMenuClick,
 }: {
   onSearch: () => void;
   searchQuery: string;
@@ -986,6 +1032,7 @@ function TopBar({
   notifCount: number;
   onAdmin: () => void;
   userProfile: { name: string; email: string; phone: string; role: string };
+  onMenuClick: () => void;
 }) {
   const initials =
     userProfile.name
@@ -996,8 +1043,16 @@ function TopBar({
       .toUpperCase() || "U";
 
   return (
-    <header className="fixed left-60 right-0 top-0 h-16 bg-background border-b border-border flex items-center px-6 gap-4 z-20">
-      <div className="flex-1 max-w-md relative">
+    <header className="fixed left-0 xl:left-60 right-0 top-0 h-16 bg-background border-b border-border flex items-center px-3 sm:px-4 xl:px-6 gap-2 sm:gap-4 z-30">
+      <button
+        onClick={onMenuClick}
+        className="xl:hidden p-2 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
+        aria-label="Open menu"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      <div className="flex-1 min-w-0 max-w-none xl:max-w-md relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
 
         <input
@@ -1005,11 +1060,11 @@ function TopBar({
           onChange={(e) => setSearchQuery(e.target.value)}
           onFocus={onSearch}
           placeholder="Search clients, contacts, contracts…"
-          className="w-full pl-9 pr-4 py-2 bg-muted rounded-md text-sm outline-none focus:ring-2 ring-ring transition-all"
+          className="w-full pl-9 pr-3 sm:pr-4 py-2 bg-muted rounded-md text-sm outline-none focus:ring-2 ring-ring transition-all truncate"
         />
       </div>
 
-      <div className="flex items-center gap-2 ml-auto">
+      <div className="flex items-center gap-1 sm:gap-2 ml-auto shrink-0">
         <button
           onClick={onNotifications}
           className="relative p-2 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
@@ -1064,7 +1119,7 @@ function SearchOverlay({ query, clients, contacts, contracts, onClose, onNav }: 
   if (!query) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-3 sm:px-4" onClick={onClose}>
       <div className="bg-popover border border-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         {clientRes.length === 0 && contactRes.length === 0 && contractRes.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground text-sm">No results for &ldquo;{query}&rdquo;</div>
@@ -1117,8 +1172,8 @@ function SearchOverlay({ query, clients, contacts, contracts, onClose, onNav }: 
 
 function SignOutModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
+      <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-sm shadow-2xl">
         <div className="flex justify-center mb-4">
           <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
             <LogOut className="w-6 h-6 text-muted-foreground" />
@@ -1216,7 +1271,7 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
         <p className="text-muted-foreground text-sm mt-1">Overview of your renewal pipeline — Mauritius</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {[
           { label: "Total Clients", value: clients.length, sub: "registered companies" },
           { label: "Active Contracts", value: contracts.filter(c => c.status === "Active" || c.status === "On Track").length, sub: "in pipeline" },
@@ -1374,7 +1429,7 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-[900px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 {["Client", "Contract", "Renewal Date", "Days Left", "Status", "Assigned To", "Value"].map(h => (
@@ -1634,7 +1689,7 @@ async function handleAdd() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Clients</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage client companies across Mauritius</p>
@@ -1650,7 +1705,7 @@ async function handleAdd() {
       </div>
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-[760px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 {["Company", "Main Contact", "Email", "Status", "Next Renewal", "Actions"].map(h => (
@@ -1695,7 +1750,7 @@ async function handleAdd() {
       </div>
 
       {addOpen && (
-        <div className="fixed inset-0 z-[100] overflow-y-auto bg-background/80 backdrop-blur-sm px-6 py-16">
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
           <div className="mx-auto bg-card border border-border rounded-xl p-6 w-full max-w-3xl shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-bold text-lg">Add New Client</h2>
@@ -1734,8 +1789,8 @@ async function handleAdd() {
       {editTarget && <EditClientModal client={editTarget} onClose={() => setEditTarget(null)} onSave={handleEdit} />}
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
+          <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-sm shadow-2xl">
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
             <h2 className="font-bold text-lg mb-1">Delete client?</h2>
             <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{deleteTarget.company}</strong> from the database.</p>
@@ -1753,8 +1808,8 @@ async function handleAdd() {
 function EditClientModal({ client, onClose, onSave }: { client: Client; onClose: () => void; onSave: (c: Client) => void }) {
   const [form, setForm] = useState(client);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
+      <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-bold text-lg">Edit Client</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
@@ -1915,8 +1970,8 @@ function ClientDetailPage({ client: initClient, clients, contacts, setClients, o
         <EditClientModal client={client} onClose={() => setEditOpen(false)} onSave={handleEdit} />
       )}
       {deleteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
+          <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-sm shadow-2xl">
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
             <h2 className="font-bold text-lg mb-1">Delete client?</h2>
             <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{client.company}</strong> from the database.</p>
@@ -2161,7 +2216,7 @@ function ContactsPage({
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-[760px] w-full text-sm">
             <thead className="sticky top-0 bg-card z-10">
               <tr className="border-b border-border bg-muted/40">
                 {["Name", "Company", "Role", "Email", "Phone", "Status", "Last Contact", "Actions"].map(h => (
@@ -2222,7 +2277,7 @@ function ContactsPage({
       </div>
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-[100] overflow-y-auto bg-background/80 backdrop-blur-sm px-6 py-16">
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
           <div className="mx-auto bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl">
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
             <h2 className="font-bold text-lg mb-1">Delete contact?</h2>
@@ -2245,7 +2300,7 @@ function ContactsPage({
       )}
 
       {addContactOpen && (
-        <div className="fixed inset-0 z-[100] overflow-y-auto bg-background/80 backdrop-blur-sm px-6 py-16">
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
           <div className="mx-auto bg-card border border-border rounded-xl p-6 w-full max-w-3xl shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-bold text-lg">Add Contact</h2>
@@ -2313,8 +2368,8 @@ function EditContactModal({ contact, clients, onClose, onSave }: { contact: Cont
   const [form, setForm] = useState(contact);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
+      <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-md shadow-2xl max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-bold text-lg">Edit Contact</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
@@ -2469,7 +2524,7 @@ function ContactDetailPage({ contact: init, contacts, setContacts, clients, onBa
                 <Phone className="w-4 h-4" /> Call
               </a>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
               <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5" />{contact.email}</p>
               <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5" />{contact.phone || "—"}</p>
             </div>
@@ -2492,8 +2547,8 @@ function ContactDetailPage({ contact: init, contacts, setContacts, clients, onBa
         <EditContactModal contact={form} clients={clients} onClose={() => setEditOpen(false)} onSave={(updated) => { setForm(updated); void saveEditWith(updated); }} />
       )}
       {deleteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
+          <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-sm shadow-2xl">
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
             <h2 className="font-bold text-lg mb-1">Delete contact?</h2>
             <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{contact.name}</strong> from the database.</p>
@@ -2565,8 +2620,8 @@ function AddContractWizard({ clients, contacts = [], onSave, onClose }: { client
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-background/80 backdrop-blur-sm px-6 py-8">
-      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[calc(100vh-4rem)] overflow-y-auto">
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-8">
+      <div className="mx-auto bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
           <h2 className="font-bold text-lg">Add Contract</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
@@ -2615,7 +2670,7 @@ function AddContractWizard({ clients, contacts = [], onSave, onClose }: { client
                 <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
                   className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium block mb-1">Contract amount</label>
                   <input value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0"
@@ -2629,7 +2684,7 @@ function AddContractWizard({ clients, contacts = [], onSave, onClose }: { client
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium block mb-1">Contract type</label>
                   <select value={form.contractType} onChange={e => setForm(f => ({ ...f, contractType: e.target.value }))}
@@ -2718,7 +2773,7 @@ function AddContractWizard({ clients, contacts = [], onSave, onClose }: { client
           {step === 4 && (
             <div className="bg-muted/50 rounded-xl p-4 space-y-3 text-sm md:col-span-2">
               <h3 className="font-semibold">Review</h3>
-              <div className="grid grid-cols-2 gap-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2">
                 <span className="text-muted-foreground">Client</span><span className="font-medium text-right">{form.client || "—"}</span>
                 <span className="text-muted-foreground">Contract</span><span className="font-medium text-right">{form.name || "—"}</span>
                 <span className="text-muted-foreground">Renewal date</span><span className="font-medium text-right font-mono text-xs">{form.renewalDate || "—"}</span>
@@ -2936,7 +2991,7 @@ async function handleAdd(c: Contract) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Contracts</h1>
           <p className="text-muted-foreground text-sm mt-1">View and manage all client contracts</p>
@@ -2946,7 +3001,7 @@ async function handleAdd(c: Contract) {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
         {[
           { label: "Total Contracts", value: totalContracts },
           { label: "Active Contracts", value: activeContracts },
@@ -2996,7 +3051,7 @@ async function handleAdd(c: Contract) {
 
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="min-w-[760px] w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/40">
                     {["Contract", "Client", "Type", "Start Date", "Renewal Date", "Status", "Days Left", "Assigned To", "Actions"].map(h => (
@@ -3195,7 +3250,7 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
           </div>
         </div>
 
-        <div className="p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-5 text-sm">
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-5 text-sm">
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Client</p>
             <p className="font-semibold">{contract.client}</p>
@@ -3322,7 +3377,7 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
       <div className="bg-card border border-border rounded-xl p-5">
         <h2 className="font-semibold mb-4">Email History</h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-[760px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 {["Date", "Template", "Recipient", "Status", "View"].map(h => (
@@ -3356,8 +3411,8 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
       )}
 
       {editOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
+          <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-md shadow-2xl max-h-[90dvh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-bold text-lg">Edit Contract</h2>
               <button onClick={() => setEditOpen(false)} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
@@ -3381,7 +3436,7 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
                 <input type="date" value={editForm.renewalDate} onChange={e => setEditForm({ ...editForm, renewalDate: e.target.value })}
                   className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium block mb-1">Amount</label>
                   <input value={editForm.amount} onChange={e => setEditForm({ ...editForm, amount: Number(e.target.value) || 0 })}
@@ -3428,8 +3483,8 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
       )}
 
       {deleteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
+          <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-sm shadow-2xl">
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
             <h2 className="font-bold text-lg mb-1">Delete contract?</h2>
             <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{contract.name}</strong> from the database.</p>
@@ -3463,7 +3518,7 @@ function SettingsPage({ subpage, onSubpage, toast,  userProfile, setUserProfile 
   return (
     <div className="space-y-6">
       <div><h1 className="text-2xl font-bold">Settings</h1><p className="text-muted-foreground text-sm mt-1">Manage your account, organisation, and preferences</p></div>
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         <div className="bg-card border border-border rounded-xl p-2">
           {MENU.map(({ icon: Icon, label, page }) => (
             <button key={page} onClick={() => onSubpage(page)}
@@ -3473,7 +3528,7 @@ function SettingsPage({ subpage, onSubpage, toast,  userProfile, setUserProfile 
             </button>
           ))}
         </div>
-        <div className="lg:col-span-3 bg-card border border-border rounded-xl p-6">
+        <div className="xl:col-span-3 bg-card border border-border rounded-xl p-6">
           {subpage === "settings" && <SettingsPreferences toast={toast} />}
           {subpage === "settings-account" && <SettingsAccount toast={toast} profile={userProfile} setProfile={setUserProfile} />}
           {subpage === "settings-org" && <SettingsOrg toast={toast} />}
@@ -3529,7 +3584,7 @@ function SettingsPreferences({ toast }: { toast: (msg: string) => void }) {
           Appearance
         </h3>
 
-        <div className="flex items-center justify-between py-3 border-b border-border">
+        <div className="flex items-center justify-between gap-4 py-3 border-b border-border">
           <div className="flex items-center gap-3">
             {darkMode ? (
               <Moon className="w-4 h-4 text-muted-foreground" />
@@ -3555,7 +3610,7 @@ function SettingsPreferences({ toast }: { toast: (msg: string) => void }) {
         </h3>
 
         <div className="space-y-0">
-          <div className="flex items-center justify-between py-3 border-b border-border">
+          <div className="flex items-center justify-between gap-4 py-3 border-b border-border">
             <div>
               <p className="font-medium text-sm">Email alerts</p>
               <p className="text-xs text-muted-foreground">
@@ -3565,7 +3620,7 @@ function SettingsPreferences({ toast }: { toast: (msg: string) => void }) {
             <Toggle checked={prefs.emailAlerts} onChange={() => toggle("emailAlerts")} />
           </div>
 
-          <div className="flex items-center justify-between py-3 border-b border-border">
+          <div className="flex items-center justify-between gap-4 py-3 border-b border-border">
             <div>
               <p className="font-medium text-sm">Failed renewal alerts</p>
               <p className="text-xs text-muted-foreground">
@@ -3575,7 +3630,7 @@ function SettingsPreferences({ toast }: { toast: (msg: string) => void }) {
             <Toggle checked={prefs.failedAlerts} onChange={() => toggle("failedAlerts")} />
           </div>
 
-          <div className="flex items-center justify-between py-3 border-b border-border">
+          <div className="flex items-center justify-between gap-4 py-3 border-b border-border">
             <div>
               <p className="font-medium text-sm">Renewal alerts</p>
               <p className="text-xs text-muted-foreground">
@@ -3585,7 +3640,7 @@ function SettingsPreferences({ toast }: { toast: (msg: string) => void }) {
             <Toggle checked={prefs.renewalAlerts} onChange={() => toggle("renewalAlerts")} />
           </div>
 
-          <div className="flex items-center justify-between py-3 border-b border-border">
+          <div className="flex items-center justify-between gap-4 py-3 border-b border-border">
             <div>
               <p className="font-medium text-sm">Weekly digest</p>
               <p className="text-xs text-muted-foreground">
@@ -3595,7 +3650,7 @@ function SettingsPreferences({ toast }: { toast: (msg: string) => void }) {
             <Toggle checked={prefs.weeklyDigest} onChange={() => toggle("weeklyDigest")} />
           </div>
 
-          <div className="flex items-center justify-between py-3">
+          <div className="flex items-center justify-between gap-4 py-3">
             <div>
               <p className="font-medium text-sm">SMS alerts</p>
               <p className="text-xs text-muted-foreground">
@@ -3625,7 +3680,7 @@ function SettingsAccount({ toast, profile, setProfile }: {
         <div className="w-16 h-16 rounded-full bg-foreground/10 flex items-center justify-center text-xl font-bold">{initials}</div>
         <div><p className="font-semibold">{profile.name}</p><p className="text-sm text-muted-foreground">{profile.role}</p></div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[{ label: "Full Name", key: "name" }, { label: "Email", key: "email" }, { label: "Phone", key: "phone" }].map(f => (
           <div key={f.key}>
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">{f.label}</label>
@@ -3651,7 +3706,7 @@ function SettingsOrg({ toast }: { toast: (msg: string) => void }) {
     <div>
       <h2 className="font-bold text-lg mb-1">Organisation</h2>
       <p className="text-sm text-muted-foreground mb-6">Details about your company</p>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[{ label: "Organisation Name", value: "RenewalOps (Mauritius) Ltd" }, { label: "Industry", value: "Technology Services" }, { label: "BRN Number", value: "C24012345678" }, { label: "VAT Number", value: "MU12345678" }, { label: "Website", value: "www.renewalops.mu" }, { label: "Country", value: "Mauritius" }].map(f => (
           <div key={f.label}><label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">{f.label}</label><input defaultValue={f.value} className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" /></div>
         ))}
@@ -3757,7 +3812,7 @@ function SettingsTerms() {
         <section>
           <h3 className="font-semibold text-foreground mb-2">Role Permissions</h3>
           <div className="border border-border rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
+            <table className="min-w-[760px] w-full text-sm">
               <thead><tr className="bg-muted/40 border-b border-border">{["Role", "View", "Edit", "Delete", "Admin"].map(h => <th key={h} className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-border">
                 {[["Administrator", "✓", "✓", "✓", "✓"], ["Manager", "✓", "✓", "✗", "✗"], ["Viewer", "✓", "✗", "✗", "✗"]].map(row => (
@@ -3845,8 +3900,8 @@ const initials =
       </div>
 
       {editOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
+          <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-md shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-bold text-lg">Edit Profile</h2>
               <button onClick={() => setEditOpen(false)} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
@@ -3903,7 +3958,7 @@ function NotificationsPage({ notifications, setNotifications }: { notifications:
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           {showArchived && (
             <button onClick={() => { setShowArchived(false); setOpenNotif(null); }}
@@ -3964,7 +4019,7 @@ function NotificationsPage({ notifications, setNotifications }: { notifications:
           ))}
         </div>
         {openNotif && (
-          <div className="lg:col-span-3 bg-card border border-border rounded-xl p-6 page-enter">
+          <div className="xl:col-span-3 bg-card border border-border rounded-xl p-6 page-enter">
             <div className="flex items-start justify-between mb-4">
               <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", typeBg(openNotif.type))}>{typeIcon(openNotif.type)}</div>
               <button onClick={() => setOpenNotif(null)} className="p-1.5 rounded-md hover:bg-accent text-muted-foreground"><X className="w-4 h-4" /></button>
@@ -4022,6 +4077,7 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsSubpage, setSettingsSubpage] = useState<Page>("settings");
   const [signOutOpen, setSignOutOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   //const [userProfile, setUserProfile] = useState({ name: "John Doe", email: "john@company.mu", phone: "+230 5XXX XXXX", role: "Administrator" });
   const [userProfile, setUserProfile] = useState({
   name: user?.fullName || "RenewalOps User",
@@ -4141,6 +4197,8 @@ useEffect(() => {
   function handleNav(p: Page) {
     if (p === "settings") setSettingsSubpage("settings");
     navigate(p); setSearchQuery(""); setSearchOpen(false);
+     setPage(p);
+  setSidebarOpen(false);
   }
 
   async function handleSignOut() {
@@ -4196,116 +4254,173 @@ if (!isSignedIn) {
   );
 }
 
-  return (
-    <>
-      <style>{GLOBAL_CSS}</style>
-      <div className="flex h-screen bg-background text-foreground overflow-hidden">
-        <Sidebar
-  current={page}
-  onNav={handleNav}
-  onSignOut={() => setSignOutOpen(true)}
-  userProfile={userProfile}
-/>
-        <div className="flex-1 flex flex-col min-w-0 ml-60">
-       <TopBar
-  onSearch={() => setSearchOpen(true)}
-  searchQuery={searchQuery}
-  setSearchQuery={setSearchQuery}
-  onNotifications={() => handleNav("notifications")}
-  notifCount={unreadCount}
-  onAdmin={() => handleNav("admin")}
-  userProfile={userProfile}
-/>
-          <main className="flex-1 overflow-y-auto pt-16">
-            <div className="max-w-7xl mx-auto px-6 py-6">
-              <PageWrapper pageKey={page}>
-                {page === "dashboard" && <DashboardPage clients={clients} contracts={contracts} onNav={handleNav} />}
-                {page === "clients" && (
-                  <ClientsPage clients={clients} setClients={setClients}
-                    onDetail={c => { setSelectedClient(c); navigate("client-detail"); }} toast={addToast} />
-                )}
-                {page === "client-detail" && selectedClient && (
-                  <ClientDetailPage
-                    client={selectedClient}
-                    clients={clients}
-                    contacts={contacts}
-                    setClients={setClients}
-                    onBack={() => navigate("clients")}
-                    onNav={handleNav}
-                    toast={addToast}
-                  />
-                )}
-                {page === "contacts" && (
-                  <ContactsPage
-                    contacts={contacts}
-                    setContacts={setContacts}
-                    onDetail={c => { setSelectedContact(c); navigate("contact-detail"); }}
-                    clients={clients}
-                    contracts={contracts}
-                    setContracts={setContracts}
-                    toast={addToast}
-                  />
-                )}
-                {page === "contact-detail" && selectedContact && (
-                  <ContactDetailPage contact={selectedContact} contacts={contacts} setContacts={setContacts} clients={clients} onBack={() => navigate("contacts")} toast={addToast} />
-                )}
-                {page === "contracts" && (
-                  <ContractsPage
-                    contracts={contracts}
-                    clients={clients}
-                    contacts={contacts}
-                    setContracts={setContracts}
-                    onDetail={c => { setSelectedContract(c); navigate("contract-detail"); }}
-                    toast={addToast}
-                  />
-                )}
-                {page === "contract-detail" && selectedContract && (
-                  <ContractDetailPage
-                    contract={selectedContract}
-                    contracts={contracts}
-                    contacts={contacts}
-                    setContracts={setContracts}
-                    onBack={() => navigate("contracts")}
-                    toast={addToast}
-                  />
-                )}
-                {(page === "settings" || page.startsWith("settings-")) && (
-                 <SettingsPage
-  subpage={settingsSubpage}
-  onSubpage={p => {
-    setSettingsSubpage(p);
-    navigate(p);
-  }}
-  toast={addToast}
-  userProfile={userProfile}
-  setUserProfile={setUserProfile}
-/>
-                )}
-                {page === "admin" && <AdminPage toast={addToast} profile={userProfile} setProfile={setUserProfile} />}
-                {page === "notifications" && (
-  <NotificationsPage
-    notifications={notifications}
-    setNotifications={setGeneratedNotifications}
-  />
-)}
-              </PageWrapper>
-            </div>
-          </main>
-        </div>
+ return (
+  <>
+    <style>{GLOBAL_CSS}</style>
 
-        {searchOpen && searchQuery && (
-          <SearchOverlay
-            query={searchQuery}
-            clients={clients}
-            contacts={contacts}
-            contracts={contracts}
-            onClose={() => { setSearchOpen(false); setSearchQuery(""); }}
-            onNav={handleNav}
-          />
-        )}
-        {signOutOpen && <SignOutModal onConfirm={handleSignOut} onCancel={() => setSignOutOpen(false)} />}
+    <div className="flex h-screen bg-background text-foreground overflow-hidden">
+      <Sidebar
+        current={page}
+        onNav={handleNav}
+        onSignOut={() => setSignOutOpen(true)}
+        userProfile={userProfile}
+        mobileOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
+      <div className="flex-1 flex flex-col min-w-0 w-full ml-0 xl:ml-60">
+        <TopBar
+          onSearch={() => setSearchOpen(true)}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          onNotifications={() => handleNav("notifications")}
+          notifCount={unreadCount}
+          onAdmin={() => handleNav("admin")}
+          userProfile={userProfile}
+          onMenuClick={() => setSidebarOpen(true)}
+        />
+
+        <main className="flex-1 overflow-y-auto pt-16">
+          <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 xl:px-6 py-4 xl:py-6">
+            <PageWrapper pageKey={page}>
+              {page === "dashboard" && (
+                <DashboardPage
+                  clients={clients}
+                  contracts={contracts}
+                  onNav={handleNav}
+                />
+              )}
+
+              {page === "clients" && (
+                <ClientsPage
+                  clients={clients}
+                  setClients={setClients}
+                  onDetail={(c) => {
+                    setSelectedClient(c);
+                    navigate("client-detail");
+                  }}
+                  toast={addToast}
+                />
+              )}
+
+              {page === "client-detail" && selectedClient && (
+                <ClientDetailPage
+                  client={selectedClient}
+                  clients={clients}
+                  contacts={contacts}
+                  setClients={setClients}
+                  onBack={() => navigate("clients")}
+                  onNav={handleNav}
+                  toast={addToast}
+                />
+              )}
+
+              {page === "contacts" && (
+                <ContactsPage
+                  contacts={contacts}
+                  setContacts={setContacts}
+                  onDetail={(c) => {
+                    setSelectedContact(c);
+                    navigate("contact-detail");
+                  }}
+                  clients={clients}
+                  contracts={contracts}
+                  setContracts={setContracts}
+                  toast={addToast}
+                />
+              )}
+
+              {page === "contact-detail" && selectedContact && (
+                <ContactDetailPage
+                  contact={selectedContact}
+                  contacts={contacts}
+                  setContacts={setContacts}
+                  clients={clients}
+                  onBack={() => navigate("contacts")}
+                  toast={addToast}
+                />
+              )}
+
+              {page === "contracts" && (
+                <ContractsPage
+                  contracts={contracts}
+                  clients={clients}
+                  contacts={contacts}
+                  setContracts={setContracts}
+                  onDetail={(c) => {
+                    setSelectedContract(c);
+                    navigate("contract-detail");
+                  }}
+                  toast={addToast}
+                />
+              )}
+
+              {page === "contract-detail" && selectedContract && (
+                <ContractDetailPage
+                  contract={selectedContract}
+                  contracts={contracts}
+                  contacts={contacts}
+                  setContracts={setContracts}
+                  onBack={() => navigate("contracts")}
+                  toast={addToast}
+                />
+              )}
+
+              {(page === "settings" || page.startsWith("settings-")) && (
+                <SettingsPage
+                  subpage={settingsSubpage}
+                  onSubpage={(p) => {
+                    setSettingsSubpage(p);
+                    navigate(p);
+                  }}
+                  toast={addToast}
+                  userProfile={userProfile}
+                  setUserProfile={setUserProfile}
+                />
+              )}
+
+              {page === "admin" && (
+                <AdminPage
+                  toast={addToast}
+                  profile={userProfile}
+                  setProfile={setUserProfile}
+                />
+              )}
+
+              {page === "notifications" && (
+                <NotificationsPage
+                  notifications={notifications}
+                  setNotifications={setGeneratedNotifications}
+                />
+              )}
+            </PageWrapper>
+          </div>
+        </main>
       </div>
-      <ToastContainer toasts={toasts} remove={removeToast} />
-    </>
-  );
+
+      {searchOpen && searchQuery && (
+        <SearchOverlay
+          query={searchQuery}
+          clients={clients}
+          contacts={contacts}
+          contracts={contracts}
+          onClose={() => {
+            setSearchOpen(false);
+            setSearchQuery("");
+          }}
+          onNav={handleNav}
+        />
+      )}
+
+      {signOutOpen && (
+        <SignOutModal
+          onConfirm={handleSignOut}
+          onCancel={() => setSignOutOpen(false)}
+        />
+      )}
+    </div>
+
+    <ToastContainer toasts={toasts} remove={removeToast} />
+  </>
+);
 }
