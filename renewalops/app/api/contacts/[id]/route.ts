@@ -32,11 +32,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         id,
       },
       data: {
+         // Basic contact information
         name: body.name || undefined,
         company: body.company || undefined,
         role: body.role ?? undefined,
         email: body.email ?? undefined,
         phone: body.phone ?? undefined,
+
+        // Contact details
+        status: body.status ?? undefined,
+        lastContact: body.lastContact ?? undefined,
+        notes: body.notes ?? undefined,
+        
         ...(clientId ? { clientId } : {}),
       },
       include: {
