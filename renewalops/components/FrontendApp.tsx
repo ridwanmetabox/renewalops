@@ -3424,10 +3424,7 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Notice Period</p>
             <p className="font-semibold">{contract.noticePeriod}</p>
           </div>
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Assigned Staff</p>
-            <p className="font-semibold">{contract.assignedTo}</p>
-          </div>
+        
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Primary Contact</p>
             <p className="font-semibold">{clientContact?.name || "—"}</p>
@@ -3584,15 +3581,7 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
                   {CONTRACT_TYPES.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="text-sm font-medium block mb-1">Assigned Staff</label>
-                <select value={editForm.assignedTo} onChange={e => setEditForm({ ...editForm, assignedTo: e.target.value })}
-                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
-                  <option value="">— Select assigned staff —</option>
-                  {STAFF_MEMBERS.map(s => <option key={s}>{s}</option>)}
-                  {contacts.map(c => <option key={c.id} value={c.name}>{c.name} · {c.company}</option>)}
-                </select>
-              </div>
+             
               <div>
                 <label className="text-sm font-medium block mb-1">Status</label>
                 <select value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value as Status })}
