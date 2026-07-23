@@ -2826,14 +2826,7 @@ function AddContractWizard({ clients, contacts = [], onSave, onClose }: { client
                     {CONTRACT_TYPES.map(t => <option key={t}>{t}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">Assigned staff</label>
-                  <select value={form.assignedTo} onChange={e => setForm(f => ({ ...f, assignedTo: e.target.value }))}
-                    className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
-                    <option value="">— Select a contact —</option>
-                    {contacts.map(c => <option key={c.id} value={c.name}>{c.name} · {c.company}</option>)}
-                  </select>
-                </div>
+
               </div>
             </>
           )}
@@ -3188,7 +3181,7 @@ async function handleAdd(c: Contract) {
               <table className="min-w-[760px] w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/40">
-                    {["Contract", "Client", "Type", "Start Date", "Renewal Date", "Status", "Days Left", "Assigned To", "Actions"].map(h => (
+                   {["Contract", "Client", "Type", "Start Date", "Renewal Date", "Status", "Days Left", "Actions"].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -3210,7 +3203,7 @@ async function handleAdd(c: Contract) {
                           {c.daysLeft < 0 ? `${Math.abs(c.daysLeft)}d overdue` : `${c.daysLeft}d`}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-muted-foreground text-xs">{c.assignedTo}</td>
+                      
                       <td className="px-4 py-3.5">
                         <div className="flex gap-1">
                           <button onClick={() => onDetail(c)} className="px-2.5 py-1 border border-border rounded text-xs hover:bg-accent transition-colors font-medium whitespace-nowrap">
