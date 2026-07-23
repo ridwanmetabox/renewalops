@@ -1,32 +1,62 @@
 import { NextResponse } from "next/server";
-import { sendRenewalEmail } from "@/lib/email";
+import { Resend } from "resend";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const result = await sendRenewalEmail({
-      to: "ridwan.metabox@outlook.com",
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL;
+    const to = process.env.TEST_EMAIL_TO;
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { success: false, error: "Missing RESEND_API_KEY" },
+        { status: 500 },
+      );
+    }
+
+    if (!from) {
+      return NextResponse.json(
+        { success: false, error: "Missing EMAIL_FROM or RESEND_FROM_EMAIL" },
+        { status: 500 },
+      );
+    }
+
+    if (!to) {
+      return NextResponse.json(
+        { success: false, error: "Missing TEST_EMAIL_TO" },
+        { status: 500 },
+      );
+    }
+
+    const resend = new Resend(apiKey);
+
+    const result = await resend.emails.send({
+      from,
+      to,
       subject: "RenewalOps Test Email",
       html: `
-        <h2>RenewalOps Test Email</h2>
-        <p>If you received this, Resend is working.</p>
+        <h2>RenewalOps email test</h2>
+        <p>If you received this email, Resend is working.</p>
       `,
     });
 
     return NextResponse.json({
       success: true,
-      message: "Email sent successfully",
+      message: "Test email sent",
       result,
     });
   } catch (error) {
-    console.error("Resend test error:", error);
+    console.error("Test email error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to send email",
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : "Failed to send email",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
