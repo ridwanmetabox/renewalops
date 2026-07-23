@@ -81,7 +81,141 @@ type NotificationOverride = {
 };
 
 interface Toast { id: string; message: string; type: "success" | "error" | "info"; }
+type UserProfile = {
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+};
 
+
+type OrganizationProfile = {
+  name: string;
+  industry: string;
+  brn: string;
+  vat: string;
+  website: string;
+  country: string;
+  address: string;
+};
+
+type AppPreferences = {
+  emailAlerts: boolean;
+  failedAlerts: boolean;
+  renewalAlerts: boolean;
+  weeklyDigest: boolean;
+  smsAlerts: boolean;
+};
+
+type EmailTemplateSetting = {
+  name: string;
+  active: boolean;
+};
+
+const USER_PROFILE_STORAGE_KEY = "renewalops:user-profile";
+const ORGANIZATION_PROFILE_STORAGE_KEY = "renewalops:organization-profile";
+const APP_PREFERENCES_STORAGE_KEY = "renewalops:preferences";
+const EMAIL_TEMPLATES_STORAGE_KEY = "renewalops:email-templates";
+
+const DEFAULT_USER_PROFILE: UserProfile = {
+  name: "RenewalOps User",
+  email: "",
+  phone: "+230 5XXX XXXX",
+  role: "Administrator",
+};
+
+const DEFAULT_ORGANIZATION_PROFILE: OrganizationProfile = {
+  name: "RenewalOps (Mauritius) Ltd",
+  industry: "Technology Services",
+  brn: "C24012345678",
+  vat: "MU12345678",
+  website: "www.renewalops.mu",
+  country: "Mauritius",
+  address: "Level 5, Ebène Cybercity, 72201, Mauritius",
+};
+
+const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  emailAlerts: true,
+  failedAlerts: true,
+  renewalAlerts: true,
+  weeklyDigest: false,
+  smsAlerts: false,
+};
+
+const DEFAULT_EMAIL_TEMPLATES: EmailTemplateSetting[] = [
+  { name: "Renewal Reminder (30 days)", active: true },
+  { name: "Renewal Reminder (7 days)", active: true },
+  { name: "Overdue Notice", active: true },
+  { name: "Welcome Email", active: false },
+  { name: "Invoice Issued", active: true },
+];
+
+function getStoredJson<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const value = window.localStorage.getItem(key);
+    return value ? (JSON.parse(value) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredJson<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+type DatabaseSettings = {
+  accountProfile?: Partial<UserProfile>;
+  organizationProfile?: Partial<OrganizationProfile>;
+  preferences?: Partial<AppPreferences>;
+  emailTemplates?: EmailTemplateSetting[];
+};
+
+async function fetchDatabaseSettings(): Promise<DatabaseSettings> {
+  const response = await fetch("/api/settings", {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+
+  const data = await readApiJson(response, "/api/settings");
+
+  if (!response.ok) {
+    throw new Error(
+      stringValue(
+        asRecord(data).message ?? asRecord(data).error,
+        "Failed to load settings from the database.",
+      ),
+    );
+  }
+
+  return asRecord(data).settings as DatabaseSettings;
+}
+
+async function saveDatabaseSetting<T>(key: keyof DatabaseSettings, value: T) {
+  const response = await fetch("/api/settings", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ key, value }),
+  });
+
+  const data = await readApiJson(response, "/api/settings");
+
+  if (!response.ok) {
+    throw new Error(
+      stringValue(
+        asRecord(data).message ?? asRecord(data).error,
+        `Failed to save ${key}.`,
+      ),
+    );
+  }
+
+  return data;
+}
 // ─── Mock Data (Mauritius) ────────────────────────────────────────────────────
 
 const INIT_CLIENTS: Client[] = [
@@ -3501,10 +3635,38 @@ function ContractDetailPage({ contract: initContract, contracts, contacts, setCo
 
 // ─── SETTINGS ─────────────────────────────────────────────────────────────────
 
-function SettingsPage({ subpage, onSubpage, toast,  userProfile, setUserProfile }: {
-  subpage: Page; onSubpage: (p: Page) => void; toast: (msg: string, type?: Toast["type"]) => void;
-  userProfile: { name: string; email: string; phone: string; role: string };
-  setUserProfile: (p: { name: string; email: string; phone: string; role: string }) => void;
+function SettingsPage({
+  subpage,
+  onSubpage,
+  toast,
+  userProfile,
+  setUserProfile,
+  onSaveUserProfile,
+  organizationProfile,
+  setOrganizationProfile,
+  onSaveOrganizationProfile,
+  preferences,
+  setPreferences,
+  onSavePreferences,
+  emailTemplates,
+  setEmailTemplates,
+  onSaveEmailTemplates,
+}: {
+  subpage: Page;
+  onSubpage: (p: Page) => void;
+  toast: (msg: string, type?: Toast["type"]) => void;
+  userProfile: UserProfile;
+  setUserProfile: (p: UserProfile) => void;
+  onSaveUserProfile: (p: UserProfile) => Promise<void>;
+  organizationProfile: OrganizationProfile;
+  setOrganizationProfile: (p: OrganizationProfile) => void;
+  onSaveOrganizationProfile: (p: OrganizationProfile) => Promise<void>;
+  preferences: AppPreferences;
+  setPreferences: (p: AppPreferences) => void;
+  onSavePreferences: (p: AppPreferences) => Promise<void>;
+  emailTemplates: EmailTemplateSetting[];
+  setEmailTemplates: (p: EmailTemplateSetting[]) => void;
+  onSaveEmailTemplates: (p: EmailTemplateSetting[]) => Promise<void>;
 }) {
   const MENU = [
     { icon: User, label: "Account", page: "settings-account" as Page },
@@ -3515,25 +3677,74 @@ function SettingsPage({ subpage, onSubpage, toast,  userProfile, setUserProfile 
     { icon: HelpCircle, label: "Get Help", page: "settings-help" as Page },
     { icon: FileText, label: "Terms & Permissions", page: "settings-terms" as Page },
   ];
+
   return (
     <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold">Settings</h1><p className="text-muted-foreground text-sm mt-1">Manage your account, organisation, and preferences</p></div>
+      <div>
+        <h1 className="text-2xl font-bold">Settings</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Manage your account, organisation, and preferences
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         <div className="bg-card border border-border rounded-xl p-2">
           {MENU.map(({ icon: Icon, label, page }) => (
-            <button key={page} onClick={() => onSubpage(page)}
-              className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                subpage === page ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
-              <Icon className="w-4 h-4" />{label}
+            <button
+              key={page}
+              onClick={() => onSubpage(page)}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                subpage === page
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
             </button>
           ))}
         </div>
-        <div className="xl:col-span-3 bg-card border border-border rounded-xl p-6">
-          {subpage === "settings" && <SettingsPreferences toast={toast} />}
-          {subpage === "settings-account" && <SettingsAccount toast={toast} profile={userProfile} setProfile={setUserProfile} />}
-          {subpage === "settings-org" && <SettingsOrg toast={toast} />}
+
+        <div className="xl:col-span-3 bg-card border border-border rounded-xl p-4 sm:p-6 min-w-0">
+          {subpage === "settings" && (
+            <SettingsPreferences
+              toast={toast}
+              preferences={preferences}
+              setPreferences={setPreferences}
+              onSavePreferences={onSavePreferences}
+            />
+          )}
+
+          {subpage === "settings-account" && (
+            <SettingsAccount
+              toast={toast}
+              profile={userProfile}
+              setProfile={setUserProfile}
+              onSaveProfile={onSaveUserProfile}
+            />
+          )}
+
+          {subpage === "settings-org" && (
+            <SettingsOrg
+              toast={toast}
+              profile={organizationProfile}
+              setProfile={setOrganizationProfile}
+              onSaveProfile={onSaveOrganizationProfile}
+            />
+          )}
+
           {subpage === "settings-security" && <SettingsSecurity toast={toast} />}
-          {subpage === "settings-email" && <SettingsEmail toast={toast} />}
+
+          {subpage === "settings-email" && (
+            <SettingsEmail
+              toast={toast}
+              templates={emailTemplates}
+              setTemplates={setEmailTemplates}
+              onSaveTemplates={onSaveEmailTemplates}
+            />
+          )}
+
           {subpage === "settings-help" && <SettingsHelp />}
           {subpage === "settings-terms" && <SettingsTerms />}
         </div>
@@ -3541,36 +3752,43 @@ function SettingsPage({ subpage, onSubpage, toast,  userProfile, setUserProfile 
     </div>
   );
 }
-
-function SettingsPreferences({ toast }: { toast: (msg: string) => void }) {
+function SettingsPreferences({
+  toast,
+  preferences,
+  setPreferences,
+  onSavePreferences,
+}: {
+  toast: (msg: string, type?: Toast["type"]) => void;
+  preferences: AppPreferences;
+  setPreferences: (p: AppPreferences) => void;
+  onSavePreferences: (p: AppPreferences) => Promise<void>;
+}) {
   const { resolvedTheme, setTheme } = useTheme();
-
-  const [prefs, setPrefs] = useState({
-    emailAlerts: true,
-    failedAlerts: true,
-    renewalAlerts: true,
-    weeklyDigest: false,
-    smsAlerts: false,
-  });
-
   const darkMode = resolvedTheme === "dark";
 
-  const toggle = (k: keyof typeof prefs) => {
-    setPrefs((p) => ({ ...p, [k]: !p[k] }));
-    toast("Preference saved.");
-  };
+  async function toggle(k: keyof AppPreferences) {
+    const next = { ...preferences, [k]: !preferences[k] };
+    setPreferences(next);
 
-  const handleThemeToggle = () => {
+    try {
+      await onSavePreferences(next);
+      toast("Preference saved.");
+    } catch (error) {
+      console.error("Save preference error:", error);
+      toast(error instanceof Error ? error.message : "Failed to save preference.", "error");
+    }
+  }
+
+  function handleThemeToggle() {
     const newTheme = darkMode ? "light" : "dark";
-
     setTheme(newTheme);
 
     toast(
       newTheme === "dark"
         ? "Switched to dark mode."
-        : "Switched to light mode."
+        : "Switched to light mode.",
     );
-  };
+  }
 
   return (
     <div>
@@ -3610,109 +3828,264 @@ function SettingsPreferences({ toast }: { toast: (msg: string) => void }) {
         </h3>
 
         <div className="space-y-0">
-          <div className="flex items-center justify-between gap-4 py-3 border-b border-border">
-            <div>
-              <p className="font-medium text-sm">Email alerts</p>
-              <p className="text-xs text-muted-foreground">
-                Receive renewal notifications by email
-              </p>
-            </div>
-            <Toggle checked={prefs.emailAlerts} onChange={() => toggle("emailAlerts")} />
-          </div>
+          {[
+            {
+              key: "emailAlerts" as const,
+              label: "Email alerts",
+              desc: "Receive renewal notifications by email",
+            },
+            {
+              key: "failedAlerts" as const,
+              label: "Failed renewal alerts",
+              desc: "Get notified when a renewal email fails",
+            },
+            {
+              key: "renewalAlerts" as const,
+              label: "Renewal alerts",
+              desc: "Notify me before contract renewal dates",
+            },
+            {
+              key: "weeklyDigest" as const,
+              label: "Weekly digest",
+              desc: "Receive a weekly summary of upcoming renewals",
+            },
+            {
+              key: "smsAlerts" as const,
+              label: "SMS alerts",
+              desc: "Receive important alerts by SMS",
+            },
+          ].map((item) => (
+            <div
+              key={item.key}
+              className="flex items-center justify-between gap-4 py-3 border-b border-border last:border-b-0"
+            >
+              <div>
+                <p className="font-medium text-sm">{item.label}</p>
+                <p className="text-xs text-muted-foreground">{item.desc}</p>
+              </div>
 
-          <div className="flex items-center justify-between gap-4 py-3 border-b border-border">
-            <div>
-              <p className="font-medium text-sm">Failed renewal alerts</p>
-              <p className="text-xs text-muted-foreground">
-                Get notified when a renewal email fails
-              </p>
+              <Toggle
+                checked={preferences[item.key]}
+                onChange={() => void toggle(item.key)}
+              />
             </div>
-            <Toggle checked={prefs.failedAlerts} onChange={() => toggle("failedAlerts")} />
-          </div>
-
-          <div className="flex items-center justify-between gap-4 py-3 border-b border-border">
-            <div>
-              <p className="font-medium text-sm">Renewal alerts</p>
-              <p className="text-xs text-muted-foreground">
-                Notify me before contract renewal dates
-              </p>
-            </div>
-            <Toggle checked={prefs.renewalAlerts} onChange={() => toggle("renewalAlerts")} />
-          </div>
-
-          <div className="flex items-center justify-between gap-4 py-3 border-b border-border">
-            <div>
-              <p className="font-medium text-sm">Weekly digest</p>
-              <p className="text-xs text-muted-foreground">
-                Receive a weekly summary of upcoming renewals
-              </p>
-            </div>
-            <Toggle checked={prefs.weeklyDigest} onChange={() => toggle("weeklyDigest")} />
-          </div>
-
-          <div className="flex items-center justify-between gap-4 py-3">
-            <div>
-              <p className="font-medium text-sm">SMS alerts</p>
-              <p className="text-xs text-muted-foreground">
-                Receive important alerts by SMS
-              </p>
-            </div>
-            <Toggle checked={prefs.smsAlerts} onChange={() => toggle("smsAlerts")} />
-          </div>
+          ))}
         </div>
       </div>
     </div>
   );
 }
+
 const USER_ROLES = ["Administrator", "Manager", "Senior Staff", "Staff", "Viewer", "Billing Contact", "Support"];
 
-function SettingsAccount({ toast, profile, setProfile }: {
-  toast: (msg: string) => void;
-  profile: { name: string; email: string; phone: string; role: string };
-  setProfile: (p: { name: string; email: string; phone: string; role: string }) => void;
+function SettingsAccount({
+  toast,
+  profile,
+  setProfile,
+  onSaveProfile,
+}: {
+  toast: (msg: string, type?: Toast["type"]) => void;
+  profile: UserProfile;
+  setProfile: (p: UserProfile) => void;
+  onSaveProfile: (p: UserProfile) => Promise<void>;
 }) {
-  const initials = profile.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  const [saving, setSaving] = useState(false);
+
+  const initials =
+    profile.name
+      .split(" ")
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "U";
+
+  async function handleSave() {
+    setSaving(true);
+
+    try {
+      await onSaveProfile(profile);
+      toast("Account details saved to the database.");
+    } catch (error) {
+      console.error("Save account profile error:", error);
+      toast(error instanceof Error ? error.message : "Failed to save account details.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div>
       <h2 className="font-bold text-lg mb-1">Account</h2>
-      <p className="text-sm text-muted-foreground mb-6">Your personal account information</p>
+      <p className="text-sm text-muted-foreground mb-6">
+        Your personal account information
+      </p>
+
       <div className="flex items-center gap-5 mb-6">
-        <div className="w-16 h-16 rounded-full bg-foreground/10 flex items-center justify-center text-xl font-bold">{initials}</div>
-        <div><p className="font-semibold">{profile.name}</p><p className="text-sm text-muted-foreground">{profile.role}</p></div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[{ label: "Full Name", key: "name" }, { label: "Email", key: "email" }, { label: "Phone", key: "phone" }].map(f => (
-          <div key={f.key}>
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">{f.label}</label>
-            <input value={(profile as any)[f.key]} onChange={e => setProfile({ ...profile, [f.key]: e.target.value })}
-              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
-          </div>
-        ))}
+        <div className="w-16 h-16 rounded-full bg-foreground/10 flex items-center justify-center text-xl font-bold">
+          {initials}
+        </div>
+
         <div>
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">Role</label>
-          <select value={profile.role} onChange={e => setProfile({ ...profile, role: e.target.value })}
-            className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
-            {USER_ROLES.map(r => <option key={r}>{r}</option>)}
+          <p className="font-semibold">{profile.name}</p>
+          <p className="text-sm text-muted-foreground">{profile.role}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">
+            Full Name
+          </label>
+          <input
+            value={profile.name}
+            onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+            className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">
+            Email
+          </label>
+          <input
+            value={profile.email}
+            onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+            className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">
+            Phone
+          </label>
+          <input
+            value={profile.phone}
+            onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+            className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">
+            Role
+          </label>
+
+          <select
+            value={profile.role}
+            onChange={(e) => setProfile({ ...profile, role: e.target.value })}
+            className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+          >
+            {USER_ROLES.map((role) => (
+              <option key={role}>{role}</option>
+            ))}
           </select>
         </div>
       </div>
-      <button onClick={() => toast("Account details saved.")} className="mt-5 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Save Changes</button>
+
+      <button
+        onClick={() => void handleSave()}
+        disabled={saving}
+        className="mt-5 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+      >
+        {saving ? "Saving..." : "Save Changes"}
+      </button>
     </div>
   );
 }
 
-function SettingsOrg({ toast }: { toast: (msg: string) => void }) {
+function SettingsOrg({
+  toast,
+  profile,
+  setProfile,
+  onSaveProfile,
+}: {
+  toast: (msg: string, type?: Toast["type"]) => void;
+  profile: OrganizationProfile;
+  setProfile: (p: OrganizationProfile) => void;
+  onSaveProfile: (p: OrganizationProfile) => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+
+    try {
+      await onSaveProfile(profile);
+      toast("Organisation details saved to the database.");
+    } catch (error) {
+      console.error("Save organisation profile error:", error);
+      toast(error instanceof Error ? error.message : "Failed to save organisation details.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const fields: Array<{
+    label: string;
+    key: keyof OrganizationProfile;
+    placeholder?: string;
+  }> = [
+    { label: "Organisation Name", key: "name" },
+    { label: "Industry", key: "industry" },
+    { label: "BRN Number", key: "brn" },
+    { label: "VAT Number", key: "vat" },
+    { label: "Website", key: "website" },
+    { label: "Country", key: "country" },
+  ];
+
   return (
     <div>
       <h2 className="font-bold text-lg mb-1">Organisation</h2>
-      <p className="text-sm text-muted-foreground mb-6">Details about your company</p>
+      <p className="text-sm text-muted-foreground mb-6">
+        Details about your company
+      </p>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[{ label: "Organisation Name", value: "RenewalOps (Mauritius) Ltd" }, { label: "Industry", value: "Technology Services" }, { label: "BRN Number", value: "C24012345678" }, { label: "VAT Number", value: "MU12345678" }, { label: "Website", value: "www.renewalops.mu" }, { label: "Country", value: "Mauritius" }].map(f => (
-          <div key={f.label}><label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">{f.label}</label><input defaultValue={f.value} className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" /></div>
+        {fields.map((field) => (
+          <div key={field.key}>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">
+              {field.label}
+            </label>
+
+            <input
+              value={profile[field.key]}
+              onChange={(e) =>
+                setProfile({
+                  ...profile,
+                  [field.key]: e.target.value,
+                })
+              }
+              placeholder={field.placeholder}
+              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+            />
+          </div>
         ))}
-        <div className="col-span-2"><label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">Address</label><input defaultValue="Level 5, Ebène Cybercity, 72201, Mauritius" className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" /></div>
+
+        <div className="sm:col-span-2">
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">
+            Address
+          </label>
+
+          <input
+            value={profile.address}
+            onChange={(e) =>
+              setProfile({
+                ...profile,
+                address: e.target.value,
+              })
+            }
+            className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+          />
+        </div>
       </div>
-      <button onClick={() => toast("Organisation details saved.")} className="mt-5 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Save Changes</button>
+
+      <button
+        onClick={() => void handleSave()}
+        disabled={saving}
+        className="mt-5 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+      >
+        {saving ? "Saving..." : "Save Changes"}
+      </button>
     </div>
   );
 }
@@ -3749,20 +4122,57 @@ function SettingsSecurity({ toast }: { toast: (msg: string, type?: Toast["type"]
   );
 }
 
-function SettingsEmail({ toast }: { toast: (msg: string) => void }) {
-  const [templates, setTemplates] = useState([
-    { name: "Renewal Reminder (30 days)", active: true }, { name: "Renewal Reminder (7 days)", active: true },
-    { name: "Overdue Notice", active: true }, { name: "Welcome Email", active: false }, { name: "Invoice Issued", active: true },
-  ]);
+function SettingsEmail({
+  toast,
+  templates,
+  setTemplates,
+  onSaveTemplates,
+}: {
+  toast: (msg: string, type?: Toast["type"]) => void;
+  templates: EmailTemplateSetting[];
+  setTemplates: (templates: EmailTemplateSetting[]) => void;
+  onSaveTemplates: (templates: EmailTemplateSetting[]) => Promise<void>;
+}) {
+  async function toggleTemplate(index: number) {
+    const next = templates.map((template, templateIndex) =>
+      templateIndex === index
+        ? { ...template, active: !template.active }
+        : template,
+    );
+
+    setTemplates(next);
+
+    try {
+      await onSaveTemplates(next);
+      toast("Email template settings saved to the database.");
+    } catch (error) {
+      console.error("Save email templates error:", error);
+      toast(error instanceof Error ? error.message : "Failed to save email template settings.", "error");
+    }
+  }
+
   return (
     <div>
       <h2 className="font-bold text-lg mb-1">Email & Templates</h2>
-      <p className="text-sm text-muted-foreground mb-6">Configure email sending and manage templates</p>
+      <p className="text-sm text-muted-foreground mb-6">
+        Configure email sending and manage templates
+      </p>
+
       <div className="space-y-0.5">
-        {templates.map((t, i) => (
-          <div key={t.name} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-            <div className="flex items-center gap-3"><Mail className="w-4 h-4 text-muted-foreground" /><span className="text-sm font-medium">{t.name}</span></div>
-            <Toggle checked={t.active} onChange={() => { setTemplates(prev => prev.map((x, j) => j === i ? { ...x, active: !x.active } : x)); toast("Template updated."); }} />
+        {templates.map((template, index) => (
+          <div
+            key={template.name}
+            className="flex items-center justify-between gap-4 py-3 border-b border-border last:border-0"
+          >
+            <div className="flex items-center gap-3">
+              <Mail className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium">{template.name}</span>
+            </div>
+
+            <Toggle
+              checked={template.active}
+              onChange={() => void toggleTemplate(index)}
+            />
           </div>
         ))}
       </div>
@@ -3829,72 +4239,176 @@ function SettingsTerms() {
 
 // ─── ADMIN PAGE ───────────────────────────────────────────────────────────────
 
-function AdminPage({ toast, profile, setProfile }: {
+function AdminPage({
+  toast,
+  profile,
+  setProfile,
+  onSaveProfile,
+  preferences,
+  setPreferences,
+  onSavePreferences,
+}: {
   toast: (msg: string, type?: Toast["type"]) => void;
-  profile: { name: string; email: string; phone: string; role: string };
-  setProfile: (p: { name: string; email: string; phone: string; role: string }) => void;
+  profile: UserProfile;
+  setProfile: (p: UserProfile) => void;
+  onSaveProfile: (p: UserProfile) => Promise<void>;
+  preferences: AppPreferences;
+  setPreferences: (p: AppPreferences) => void;
+  onSavePreferences: (p: AppPreferences) => Promise<void>;
 }) {
   const [editOpen, setEditOpen] = useState(false);
-  const [notifPrefs, setNotifPrefs] = useState({ email: true, failed: true, upcoming: true });
-const initials =
-  profile.name
-    .split(" ")
-    .map((word) => word[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase() || "U";
+  const [saving, setSaving] = useState(false);
+
+  const initials =
+    profile.name
+      .split(" ")
+      .map((word) => word[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "U";
+
+  async function saveProfile() {
+    setSaving(true);
+
+    try {
+      await onSaveProfile(profile);
+      setEditOpen(false);
+      toast("Profile updated in the database.");
+    } catch (error) {
+      console.error("Admin profile save error:", error);
+      toast(error instanceof Error ? error.message : "Failed to save profile.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function togglePref(key: keyof AppPreferences) {
+    const next = { ...preferences, [key]: !preferences[key] };
+    setPreferences(next);
+
+    try {
+      await onSavePreferences(next);
+      toast("Preference saved to the database.");
+    } catch (error) {
+      console.error("Admin preference save error:", error);
+      toast(error instanceof Error ? error.message : "Failed to save preference.", "error");
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold">My Profile</h1><p className="text-muted-foreground text-sm mt-1">Manage your personal account</p></div>
+      <div>
+        <h1 className="text-2xl font-bold">My Profile</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Manage your personal account
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">Profile Summary</h2>
-              <button onClick={() => setEditOpen(true)} className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-md text-sm hover:bg-accent">
+              <button
+                onClick={() => setEditOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-md text-sm hover:bg-accent"
+              >
                 <Edit2 className="w-3.5 h-3.5" /> Edit
               </button>
             </div>
+
             <div className="flex items-center gap-5">
-             <div className="w-16 h-16 rounded-full bg-foreground/10 flex items-center justify-center text-xl font-bold shrink-0">
-  {initials}
-</div>
-              <div><p className="font-bold text-lg">{profile.name}</p><p className="text-sm text-muted-foreground">{profile.role}</p><p className="text-sm text-muted-foreground">{profile.email}</p></div>
+              <div className="w-16 h-16 rounded-full bg-foreground/10 flex items-center justify-center text-xl font-bold shrink-0">
+                {initials}
+              </div>
+
+              <div>
+                <p className="font-bold text-lg">{profile.name}</p>
+                <p className="text-sm text-muted-foreground">{profile.role}</p>
+                <p className="text-sm text-muted-foreground">{profile.email}</p>
+              </div>
             </div>
           </div>
+
           <div className="bg-card border border-border rounded-xl p-5">
             <h2 className="font-semibold mb-4">Personal Information</h2>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-              {[{ label: "Full Name", value: profile.name }, { label: "Email", value: profile.email }, { label: "Phone", value: profile.phone }, { label: "Role", value: profile.role }].map(item => (
-                <div key={item.label}><dt className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">{item.label}</dt><dd className="font-medium">{item.value}</dd></div>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+              {[
+                { label: "Full Name", value: profile.name },
+                { label: "Email", value: profile.email },
+                { label: "Phone", value: profile.phone },
+                { label: "Role", value: profile.role },
+              ].map((item) => (
+                <div key={item.label}>
+                  <dt className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">
+                    {item.label}
+                  </dt>
+                  <dd className="font-medium">{item.value}</dd>
+                </div>
               ))}
             </dl>
           </div>
+
           <div className="bg-card border border-border rounded-xl p-5">
             <h2 className="font-semibold mb-4">Notification Preferences</h2>
-            {[{ key: "email", label: "Email alerts", desc: "Renewal notifications via email" }, { key: "failed", label: "Failed email alerts", desc: "When a renewal email fails" }, { key: "upcoming", label: "Upcoming renewal alerts", desc: "30-day advance notifications" }].map(({ key, label, desc }) => (
-              <div key={key} className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
-                <div><p className="text-sm font-medium">{label}</p><p className="text-xs text-muted-foreground">{desc}</p></div>
-                <Toggle checked={(notifPrefs as any)[key]} onChange={() => { setNotifPrefs(p => ({ ...p, [key]: !(p as any)[key] })); toast("Preference saved."); }} />
+            {[
+              {
+                key: "emailAlerts" as const,
+                label: "Email alerts",
+                desc: "Renewal notifications via email",
+              },
+              {
+                key: "failedAlerts" as const,
+                label: "Failed email alerts",
+                desc: "When a renewal email fails",
+              },
+              {
+                key: "renewalAlerts" as const,
+                label: "Upcoming renewal alerts",
+                desc: "30-day advance notifications",
+              },
+            ].map(({ key, label, desc }) => (
+              <div
+                key={key}
+                className="flex items-center justify-between gap-4 py-2.5 border-b border-border last:border-0"
+              >
+                <div>
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
+                </div>
+
+                <Toggle checked={preferences[key]} onChange={() => void togglePref(key)} />
               </div>
             ))}
           </div>
         </div>
+
         <div className="space-y-4">
           <div className="bg-card border border-border rounded-xl p-5">
             <h2 className="font-semibold text-sm mb-3">Quick Actions</h2>
             <div className="space-y-1">
-              <button onClick={() => toast("Password change — go to Settings → Security.", "info")} className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+              <button
+                onClick={() => toast("Password change — go to Settings → Security.", "info")}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <Lock className="w-4 h-4" /> Change Password
               </button>
-              <button onClick={() => toast("Your data export will be ready shortly.", "info")} className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+
+              <button
+                onClick={() => toast("Your data export will be ready shortly.", "info")}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <Download className="w-4 h-4" /> Export My Data
               </button>
             </div>
           </div>
+
           <div className="bg-card border border-border rounded-xl p-5">
             <RenewalOpsLogo size="xs" />
-            <p className="text-xs text-muted-foreground mt-3">RenewalOps v1.0.0<br />© 2026 RenewalOps (Mauritius) Ltd</p>
+            <p className="text-xs text-muted-foreground mt-3">
+              RenewalOps v1.0.0
+              <br />© 2026 RenewalOps (Mauritius) Ltd
+            </p>
           </div>
         </div>
       </div>
@@ -3904,23 +4418,71 @@ const initials =
           <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-md shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-bold text-lg">Edit Profile</h2>
-              <button onClick={() => setEditOpen(false)} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
+              <button
+                onClick={() => setEditOpen(false)}
+                className="p-1 rounded hover:bg-accent"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
+
             <div className="space-y-3">
-              {[{ label: "Full Name", key: "name" }, { label: "Email", key: "email" }, { label: "Phone", key: "phone" }].map(f => (
-                <div key={f.key}><label className="text-sm font-medium block mb-1">{f.label}</label><input value={(profile as any)[f.key]} onChange={e => setProfile({ ...profile, [f.key]: e.target.value })} className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" /></div>
-              ))}
+              <div>
+                <label className="text-sm font-medium block mb-1">Full Name</label>
+                <input
+                  value={profile.name}
+                  onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium block mb-1">Email</label>
+                <input
+                  value={profile.email}
+                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium block mb-1">Phone</label>
+                <input
+                  value={profile.phone}
+                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+                />
+              </div>
+
               <div>
                 <label className="text-sm font-medium block mb-1">Role</label>
-                <select value={profile.role} onChange={e => setProfile({ ...profile, role: e.target.value })}
-                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
-                  {USER_ROLES.map(r => <option key={r}>{r}</option>)}
+                <select
+                  value={profile.role}
+                  onChange={(e) => setProfile({ ...profile, role: e.target.value })}
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+                >
+                  {USER_ROLES.map((role) => (
+                    <option key={role}>{role}</option>
+                  ))}
                 </select>
               </div>
             </div>
+
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setEditOpen(false)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
-              <button onClick={() => { setEditOpen(false); toast("Profile updated."); }} className="flex-1 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Save</button>
+              <button
+                onClick={() => setEditOpen(false)}
+                className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={() => void saveProfile()}
+                disabled={saving}
+                className="flex-1 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
             </div>
           </div>
         </div>
@@ -3928,6 +4490,7 @@ const initials =
     </div>
   );
 }
+
 
 // ─── NOTIFICATIONS PAGE ───────────────────────────────────────────────────────
 
@@ -4079,13 +4642,112 @@ export default function App() {
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   //const [userProfile, setUserProfile] = useState({ name: "John Doe", email: "john@company.mu", phone: "+230 5XXX XXXX", role: "Administrator" });
-  const [userProfile, setUserProfile] = useState({
-  name: user?.fullName || "RenewalOps User",
-  email: user?.primaryEmailAddress?.emailAddress || "",
-  phone: "+230 5XXX XXXX",
-  role: "Administrator",
+const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+  return getStoredJson<UserProfile>(USER_PROFILE_STORAGE_KEY) ?? DEFAULT_USER_PROFILE;
+});
+
+const [organizationProfile, setOrganizationProfile] = useState<OrganizationProfile>(() => {
+  return (
+    getStoredJson<OrganizationProfile>(ORGANIZATION_PROFILE_STORAGE_KEY) ??
+    DEFAULT_ORGANIZATION_PROFILE
+  );
+});
+
+const [preferences, setPreferences] = useState<AppPreferences>(() => {
+  return (
+    getStoredJson<AppPreferences>(APP_PREFERENCES_STORAGE_KEY) ??
+    DEFAULT_APP_PREFERENCES
+  );
+});
+
+const [emailTemplates, setEmailTemplates] = useState<EmailTemplateSetting[]>(() => {
+  return (
+    getStoredJson<EmailTemplateSetting[]>(EMAIL_TEMPLATES_STORAGE_KEY) ??
+    DEFAULT_EMAIL_TEMPLATES
+  );
 });
  const { toasts, add: addToast, remove: removeToast } = useToast();
+useEffect(() => {
+  if (!isLoaded) return;
+
+  let mounted = true;
+
+  async function loadSavedSettings() {
+    const clerkProfile: UserProfile = {
+      ...DEFAULT_USER_PROFILE,
+      name: user?.fullName || DEFAULT_USER_PROFILE.name,
+      email: user?.primaryEmailAddress?.emailAddress || DEFAULT_USER_PROFILE.email,
+    };
+
+    const localUserProfile =
+      getStoredJson<UserProfile>(USER_PROFILE_STORAGE_KEY) ?? clerkProfile;
+    const localOrganizationProfile =
+      getStoredJson<OrganizationProfile>(ORGANIZATION_PROFILE_STORAGE_KEY) ??
+      DEFAULT_ORGANIZATION_PROFILE;
+    const localPreferences =
+      getStoredJson<AppPreferences>(APP_PREFERENCES_STORAGE_KEY) ??
+      DEFAULT_APP_PREFERENCES;
+    const localEmailTemplates =
+      getStoredJson<EmailTemplateSetting[]>(EMAIL_TEMPLATES_STORAGE_KEY) ??
+      DEFAULT_EMAIL_TEMPLATES;
+
+    if (!mounted) return;
+
+    setUserProfile({ ...clerkProfile, ...localUserProfile });
+    setOrganizationProfile({
+      ...DEFAULT_ORGANIZATION_PROFILE,
+      ...localOrganizationProfile,
+    });
+    setPreferences({ ...DEFAULT_APP_PREFERENCES, ...localPreferences });
+    setEmailTemplates(localEmailTemplates);
+
+    try {
+      const databaseSettings = await fetchDatabaseSettings();
+
+      if (!mounted) return;
+
+      if (databaseSettings.accountProfile) {
+        const savedProfile = {
+          ...clerkProfile,
+          ...databaseSettings.accountProfile,
+        };
+        setUserProfile(savedProfile);
+        saveStoredJson(USER_PROFILE_STORAGE_KEY, savedProfile);
+      }
+
+      if (databaseSettings.organizationProfile) {
+        const savedOrganization = {
+          ...DEFAULT_ORGANIZATION_PROFILE,
+          ...databaseSettings.organizationProfile,
+        };
+        setOrganizationProfile(savedOrganization);
+        saveStoredJson(ORGANIZATION_PROFILE_STORAGE_KEY, savedOrganization);
+      }
+
+      if (databaseSettings.preferences) {
+        const savedPreferences = {
+          ...DEFAULT_APP_PREFERENCES,
+          ...databaseSettings.preferences,
+        };
+        setPreferences(savedPreferences);
+        saveStoredJson(APP_PREFERENCES_STORAGE_KEY, savedPreferences);
+      }
+
+      if (Array.isArray(databaseSettings.emailTemplates)) {
+        setEmailTemplates(databaseSettings.emailTemplates);
+        saveStoredJson(EMAIL_TEMPLATES_STORAGE_KEY, databaseSettings.emailTemplates);
+      }
+    } catch (error) {
+      console.warn("Settings API not available yet. Using browser fallback.", error);
+    }
+  }
+
+  void loadSavedSettings();
+
+  return () => {
+    mounted = false;
+  };
+}, [isLoaded, user?.id]);
 
 const notifications = buildNotificationsFromContracts(
   contracts,
@@ -4182,15 +4844,39 @@ useEffect(() => {
     setPage("dashboard");
   }
 }, [isSignedIn, pathname]);
-useEffect(() => {
-  if (!user) return;
+  const saveUserProfile = useCallback(async (profile: UserProfile) => {
+    const nextProfile = { ...DEFAULT_USER_PROFILE, ...profile };
 
-  setUserProfile(prev => ({
-    ...prev,
-    name: user.fullName || "RenewalOps User",
-    email: user.primaryEmailAddress?.emailAddress || "",
-  }));
-}, [user]);
+    setUserProfile(nextProfile);
+    saveStoredJson(USER_PROFILE_STORAGE_KEY, nextProfile);
+
+    await saveDatabaseSetting("accountProfile", nextProfile);
+  }, []);
+
+  const saveOrganizationProfile = useCallback(async (profile: OrganizationProfile) => {
+    const nextProfile = { ...DEFAULT_ORGANIZATION_PROFILE, ...profile };
+
+    setOrganizationProfile(nextProfile);
+    saveStoredJson(ORGANIZATION_PROFILE_STORAGE_KEY, nextProfile);
+
+    await saveDatabaseSetting("organizationProfile", nextProfile);
+  }, []);
+
+  const savePreferences = useCallback(async (nextPreferences: AppPreferences) => {
+    const mergedPreferences = { ...DEFAULT_APP_PREFERENCES, ...nextPreferences };
+
+    setPreferences(mergedPreferences);
+    saveStoredJson(APP_PREFERENCES_STORAGE_KEY, mergedPreferences);
+
+    await saveDatabaseSetting("preferences", mergedPreferences);
+  }, []);
+
+  const saveEmailTemplates = useCallback(async (templates: EmailTemplateSetting[]) => {
+    setEmailTemplates(templates);
+    saveStoredJson(EMAIL_TEMPLATES_STORAGE_KEY, templates);
+
+    await saveDatabaseSetting("emailTemplates", templates);
+  }, []);
 
   const navigate = useCallback((to: Page) => setPage(to), []);
 
@@ -4367,16 +5053,26 @@ if (!isSignedIn) {
               )}
 
               {(page === "settings" || page.startsWith("settings-")) && (
-                <SettingsPage
-                  subpage={settingsSubpage}
-                  onSubpage={(p) => {
-                    setSettingsSubpage(p);
-                    navigate(p);
-                  }}
-                  toast={addToast}
-                  userProfile={userProfile}
-                  setUserProfile={setUserProfile}
-                />
+            <SettingsPage
+  subpage={settingsSubpage}
+  onSubpage={(p) => {
+    setSettingsSubpage(p);
+    navigate(p);
+  }}
+  toast={addToast}
+  userProfile={userProfile}
+  setUserProfile={setUserProfile}
+  onSaveUserProfile={saveUserProfile}
+  organizationProfile={organizationProfile}
+  setOrganizationProfile={setOrganizationProfile}
+  onSaveOrganizationProfile={saveOrganizationProfile}
+  preferences={preferences}
+  setPreferences={setPreferences}
+  onSavePreferences={savePreferences}
+  emailTemplates={emailTemplates}
+  setEmailTemplates={setEmailTemplates}
+  onSaveEmailTemplates={saveEmailTemplates}
+/>
               )}
 
               {page === "admin" && (
@@ -4384,6 +5080,10 @@ if (!isSignedIn) {
                   toast={addToast}
                   profile={userProfile}
                   setProfile={setUserProfile}
+                  onSaveProfile={saveUserProfile}
+                  preferences={preferences}
+                  setPreferences={setPreferences}
+                  onSavePreferences={savePreferences}
                 />
               )}
 
