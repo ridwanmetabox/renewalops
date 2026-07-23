@@ -3014,7 +3014,7 @@ function ContractsPage({ contracts, clients, contacts, setContracts, onDetail, t
   const [filterStatus, setFilterStatus] = useState("All Statuses");
   const [filterClient, setFilterClient] = useState("All Clients");
   const [filterType, setFilterType] = useState("All Contract Types");
-  const [filterStaff, setFilterStaff] = useState("All Assigned Staff");
+  //const [filterStaff, setFilterStaff] = useState("All Assigned Staff");
 
   const totalContracts = contracts.length;
   const activeContracts = contracts.filter(c => c.status === "Active" || c.status === "On Track" || c.status === "Renewed").length;
@@ -3034,7 +3034,7 @@ function ContractsPage({ contracts, clients, contacts, setContracts, onDetail, t
     if (filterStatus !== "All Statuses" && c.status !== filterStatus) return false;
     if (filterClient !== "All Clients" && c.client !== filterClient) return false;
     if (filterType !== "All Contract Types" && c.contractType !== filterType) return false;
-    if (filterStaff !== "All Assigned Staff" && c.assignedTo !== filterStaff) return false;
+    //if (filterStaff !== "All Assigned Staff" && c.assignedTo !== filterStaff) return false;
     return true;
   });
 
@@ -3174,7 +3174,7 @@ async function handleAdd(c: Contract) {
               { value: filterStatus, set: setFilterStatus, options: ["All Statuses", "Active", "Due Soon", "Overdue", "On Hold", "Cancelled", "Renewed"] },
               { value: filterClient, set: setFilterClient, options: ["All Clients", ...clients.map(c => c.company)] },
               { value: filterType, set: setFilterType, options: ["All Contract Types", ...CONTRACT_TYPES] },
-              { value: filterStaff, set: setFilterStaff, options: ["All Assigned Staff", ...STAFF_MEMBERS] },
+              //{ value: filterStaff, set: setFilterStaff, options: ["All Assigned Staff", ...STAFF_MEMBERS] },
             ].map((f, i) => (
               <select key={i} value={f.value} onChange={e => f.set(e.target.value)}
                 className="px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
