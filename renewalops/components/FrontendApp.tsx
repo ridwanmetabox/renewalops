@@ -1566,7 +1566,7 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
           <table className="min-w-[900px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                {["Client", "Contract", "Renewal Date", "Days Left", "Status", "Assigned To", "Value"].map(h => (
+                {["Client", "Contract", "Renewal Date", "Days Left", "Status", "Value"].map(h => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -1583,14 +1583,14 @@ function DashboardPage({ clients, contracts, onNav }: { clients: Client[]; contr
                     </span>
                   </td>
                   <td className="px-5 py-3.5"><StatusBadge status={c.status} /></td>
-                  <td className="px-5 py-3.5 text-muted-foreground">{c.assignedTo || "—"}</td>
+                  
                   <td className="px-5 py-3.5 font-mono text-xs">{fmtCurrency(c.amount, c.currency)}</td>
                 </tr>
               ))}
 
               {upcomingContracts.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                 <td colSpan={6} className="px-5 py-8 text-center text-sm text-muted-foreground">
                     No upcoming renewals yet
                   </td>
                 </tr>
@@ -1858,7 +1858,7 @@ async function handleAdd() {
                   </td>
                   <td className="px-5 py-3.5 text-muted-foreground">{c.contact}</td>
                   <td className="px-5 py-3.5 text-muted-foreground">{c.email}</td>
-                  <td className="px-5 py-3.5"><StatusBadge status={c.status} /></td>
+                  <td className="px-5 py-3.5 font-mono text-xs">{fmtCurrency(c.amount, c.currency)}</td>
                   <td className="px-5 py-3.5 font-mono text-xs text-muted-foreground">{c.nextRenewal}</td>
                   <td className="px-5 py-3.5">
                     <div className="flex gap-1" onClick={e => e.stopPropagation()}>
