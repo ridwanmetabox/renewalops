@@ -1842,7 +1842,7 @@ async function handleAdd() {
           <table className="min-w-[760px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                {["Company", "Main Contact", "Email", "Status", "Next Renewal", "Actions"].map(h => (
+                {["Company", "Main Contact", "Email", "Status", "Value", "Next Renewal", "Actions"].map(h => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -1858,7 +1858,7 @@ async function handleAdd() {
                   </td>
                   <td className="px-5 py-3.5 text-muted-foreground">{c.contact}</td>
                   <td className="px-5 py-3.5 text-muted-foreground">{c.email}</td>
-                  <td className="px-5 py-3.5 font-mono text-xs">{fmtCurrency(c.amount, c.currency)}</td>
+                  
                   <td className="px-5 py-3.5 font-mono text-xs text-muted-foreground">{c.nextRenewal}</td>
                   <td className="px-5 py-3.5">
                     <div className="flex gap-1" onClick={e => e.stopPropagation()}>
@@ -1874,7 +1874,9 @@ async function handleAdd() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-sm text-muted-foreground">No clients found</td>
+                  <td colSpan={6} className="px-5 py-8 text-center text-sm text-muted-foreground">
+  No clients found
+</td>
                 </tr>
               )}
             </tbody>
