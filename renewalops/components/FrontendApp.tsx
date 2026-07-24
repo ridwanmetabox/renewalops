@@ -1011,7 +1011,7 @@ function SignupPage({ onBack, onSignup }: { onBack: () => void; onSignup: () => 
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", page: "dashboard" as Page },
   { icon: Users, label: "Clients", page: "clients" as Page },
-  { icon: BookUser, label: "Contacts", page: "contacts" as Page },
+ // { icon: BookUser, label: "Contacts", page: "contacts" as Page },
   { icon: FileText, label: "Contracts", page: "contracts" as Page },
   { icon: Settings, label: "Settings", page: "settings" as Page },
 ];
@@ -1032,7 +1032,7 @@ function Sidebar({
 }) {
   const isActive = (page: Page) => {
     if (page === "clients") return current === "clients" || current === "client-detail";
-    if (page === "contacts") return current === "contacts" || current === "contact-detail";
+   // if (page === "contacts") return current === "contacts" || current === "contact-detail";
     if (page === "contracts") return current === "contracts" || current === "contract-detail";
     if (page === "settings") return current === "settings" || current.startsWith("settings-");
     return current === page;
@@ -1884,37 +1884,95 @@ async function handleAdd() {
       </div>
 
       {addOpen && (
-        <div className="fixed inset-0 z-[100] overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
-          <div className="mx-auto bg-card border border-border rounded-xl p-6 w-full max-w-3xl shadow-2xl">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-bold text-lg">Add New Client</h2>
-              <button onClick={() => setAddOpen(false)} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { label: "Company name *", key: "company", placeholder: "ABC Company Ltd" },
-                { label: "Main contact *", key: "contact", placeholder: "John Doe" },
-                { label: "Email *", key: "email", placeholder: "john@company.mu" },
-                { label: "Phone", key: "phone", placeholder: "+230 5XXX XXXX" },
-                { label: "Billing address", key: "billingAddress", placeholder: "Port Louis, Mauritius" },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="text-sm font-medium block mb-1">{f.label}</label>
-                  <input value={(newClient as Record<string, string>)[f.key]} onChange={e => setNewClient({ ...newClient, [f.key]: e.target.value })} placeholder={f.placeholder}
-                    className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
-                </div>
-              ))}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-3 sm:p-4">
+          <div className="mx-auto w-full max-w-5xl rounded-2xl border border-border bg-card p-4 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
               <div>
-                <label className="text-sm font-medium block mb-1">Status</label>
-                <select value={newClient.status} onChange={e => setNewClient({ ...newClient, status: e.target.value as Status })}
-                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
+                <h2 className="font-bold text-lg">Add New Client</h2>
+                <p className="text-xs text-muted-foreground">Enter the client company details below.</p>
+              </div>
+              <button onClick={() => setAddOpen(false)} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-medium block mb-1">Company name *</label>
+                <input
+                  value={newClient.company}
+                  onChange={e => setNewClient({ ...newClient, company: e.target.value })}
+                  placeholder="ABC Company Ltd"
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium block mb-1">Main contact *</label>
+                <input
+                  value={newClient.contact}
+                  onChange={e => setNewClient({ ...newClient, contact: e.target.value })}
+                  placeholder="John Doe"
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium block mb-1">Email *</label>
+                <input
+                  type="email"
+                  value={newClient.email}
+                  onChange={e => setNewClient({ ...newClient, email: e.target.value })}
+                  placeholder="john@company.mu"
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium block mb-1">Phone</label>
+                <input
+                  value={newClient.phone}
+                  onChange={e => setNewClient({ ...newClient, phone: e.target.value })}
+                  placeholder="+230 5XXX XXXX"
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium block mb-1">Billing address</label>
+                <input
+                  value={newClient.billingAddress}
+                  onChange={e => setNewClient({ ...newClient, billingAddress: e.target.value })}
+                  placeholder="Port Louis, Mauritius"
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium block mb-1">Status</label>
+                <select
+                  value={newClient.status}
+                  onChange={e => setNewClient({ ...newClient, status: e.target.value as Status })}
+                  className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+                >
                   {["Active", "Pending", "Due Soon", "On Track", "Overdue", "Cancelled"].map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
             </div>
-            <div className="flex gap-2 mt-5 md:col-span-2">
-              <button onClick={() => setAddOpen(false)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
-              <button onClick={handleAdd} className="flex-1 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Save Client</button>
+
+            <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
+              <button
+                onClick={() => setAddOpen(false)}
+                className="px-4 py-2 border border-border rounded-md text-sm hover:bg-accent"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAdd}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90"
+              >
+                Save Client
+              </button>
             </div>
           </div>
         </div>
@@ -1941,32 +1999,92 @@ async function handleAdd() {
 
 function EditClientModal({ client, onClose, onSave }: { client: Client; onClose: () => void; onSave: (c: Client) => void }) {
   const [form, setForm] = useState(client);
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
-      <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="font-bold text-lg">Edit Client</h2>
-          <button onClick={onClose} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="space-y-3">
-          {[{ label: "Company", key: "company" }, { label: "Main Contact", key: "contact" }, { label: "Email", key: "email" }, { label: "Phone", key: "phone" }, { label: "Billing Address", key: "billingAddress" }].map(f => (
-            <div key={f.key}>
-              <label className="text-sm font-medium block mb-1">{f.label}</label>
-              <input value={(form as unknown as Record<string, string | number>)[f.key] ?? ""} onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-                className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring" />
-            </div>
-          ))}
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-3 sm:p-4">
+      <div className="mx-auto w-full max-w-5xl rounded-2xl border border-border bg-card p-4 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
           <div>
-            <label className="text-sm font-medium block mb-1">Status</label>
-            <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as Status })}
-              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring">
+            <h2 className="font-bold text-lg">Edit Client</h2>
+            <p className="text-xs text-muted-foreground">Update the client company details below.</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs font-medium block mb-1">Company</label>
+            <input
+              value={form.company}
+              onChange={e => setForm({ ...form, company: e.target.value })}
+              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium block mb-1">Main Contact</label>
+            <input
+              value={form.contact}
+              onChange={e => setForm({ ...form, contact: e.target.value })}
+              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium block mb-1">Email</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={e => setForm({ ...form, email: e.target.value })}
+              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium block mb-1">Phone</label>
+            <input
+              value={form.phone}
+              onChange={e => setForm({ ...form, phone: e.target.value })}
+              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium block mb-1">Billing Address</label>
+            <input
+              value={form.billingAddress}
+              onChange={e => setForm({ ...form, billingAddress: e.target.value })}
+              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium block mb-1">Status</label>
+            <select
+              value={form.status}
+              onChange={e => setForm({ ...form, status: e.target.value as Status })}
+              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm outline-none focus:ring-2 ring-ring"
+            >
               {["Active", "Pending", "Due Soon", "On Track", "Overdue", "Cancelled"].map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
         </div>
-        <div className="flex gap-2 mt-5">
-          <button onClick={onClose} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
-          <button onClick={() => onSave(form)} className="flex-1 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90">Save Changes</button>
+
+        <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-border rounded-md text-sm hover:bg-accent"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave(form)}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90"
+          >
+            Save Changes
+          </button>
         </div>
       </div>
     </div>
@@ -1983,7 +2101,12 @@ function ClientDetailPage({ client: initClient, clients, contacts, setClients, o
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleted, setDeleted] = useState(false);
+
   const client = clients.find(c => c.id === initClient.id) || initClient;
+
+  function openEditModal() {
+    setEditOpen(true);
+  }
 
   async function handleEdit(updatedClient: Client) {
     try {
@@ -2034,9 +2157,13 @@ function ClientDetailPage({ client: initClient, clients, contacts, setClients, o
   if (deleted) return (
     <div className="flex flex-col items-center justify-center h-64 space-y-4">
       <p className="text-muted-foreground">Client has been deleted.</p>
-      <button onClick={onBack} className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium">Back to Clients</button>
+      <button onClick={onBack} className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium">
+        Back to Clients
+      </button>
     </div>
   );
+
+  const linkedContacts = contacts.filter(c => c.company === client.company);
 
   return (
     <div className="space-y-6">
@@ -2045,73 +2172,160 @@ function ClientDetailPage({ client: initClient, clients, contacts, setClients, o
         <div className="h-4 w-px bg-border" />
         <h1 className="text-2xl font-bold">{client.company}</h1>
         <StatusBadge status={client.status} />
+
         <div className="ml-auto flex gap-2">
-          <button onClick={() => setEditOpen(true)} className="flex items-center gap-2 px-3 py-2 border border-border rounded-md text-sm hover:bg-accent transition-colors">
+          <button
+            onClick={openEditModal}
+            className="flex items-center gap-2 px-3 py-2 border border-border rounded-md text-sm hover:bg-accent transition-colors"
+          >
             <Edit2 className="w-3.5 h-3.5" /> Edit
           </button>
-          <button onClick={() => setDeleteOpen(true)} className="flex items-center gap-2 px-3 py-2 border border-red-400/50 text-red-500 rounded-md text-sm hover:bg-red-500/10 transition-colors">
+
+          <button
+            onClick={() => setDeleteOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 border border-red-400/50 text-red-500 rounded-md text-sm hover:bg-red-500/10 transition-colors"
+          >
             <Trash2 className="w-3.5 h-3.5" /> Delete
           </button>
         </div>
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-card border border-border rounded-xl p-5">
             <h2 className="font-semibold mb-4">Client Information</h2>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-              {[{ label: "Company", value: client.company }, { label: "Main Contact", value: client.contact }, { label: "Email", value: client.email }, { label: "Phone", value: client.phone }, { label: "Member Since", value: client.joinDate }, { label: "Active Contracts", value: client.contracts }].map(item => (
-                <div key={item.label}><dt className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-0.5">{item.label}</dt><dd className="font-medium">{item.value}</dd></div>
+
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+              {[
+                { label: "Company", value: client.company },
+                { label: "Main Contact", value: client.contact },
+                { label: "Email", value: client.email },
+                { label: "Phone", value: client.phone },
+                { label: "Member Since", value: client.joinDate },
+                { label: "Active Contracts", value: client.contracts },
+              ].map(item => (
+                <div key={item.label}>
+                  <dt className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
+                    {item.label}
+                  </dt>
+                  <dd className="font-medium">{item.value}</dd>
+                </div>
               ))}
-              <div className="col-span-2"><dt className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-0.5">Billing Address</dt><dd className="font-medium">{client.billingAddress}</dd></div>
+
+              <div className="sm:col-span-2">
+                <dt className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
+                  Billing Address
+                </dt>
+                <dd className="font-medium">{client.billingAddress}</dd>
+              </div>
             </dl>
           </div>
+
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">Active Contracts</h2>
-              <button onClick={() => onNav("contracts")} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">View all <ArrowRight className="w-3 h-3" /></button>
+              <button
+                onClick={() => onNav("contracts")}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+              >
+                View all <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
-            <p className="text-sm text-muted-foreground">{client.contracts} contract{client.contracts !== 1 ? "s" : ""} associated with this client.</p>
+
+            <p className="text-sm text-muted-foreground">
+              {client.contracts} contract{client.contracts !== 1 ? "s" : ""} associated with this client.
+            </p>
           </div>
         </div>
+
         <div className="space-y-4">
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-            <div><p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">Next Renewal</p><p className="font-bold text-lg font-mono">{client.nextRenewal}</p></div>
-            <div className="border-t border-border pt-4"><p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">Total Outstanding</p><p className="font-bold font-mono">{fmtCurrency(client.totalOutstanding, "MUR")}</p></div>
-            <div className="border-t border-border pt-4"><p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">Overdue Amount</p>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">Next Renewal</p>
+              <p className="font-bold text-lg font-mono">{client.nextRenewal}</p>
+            </div>
+
+            <div className="border-t border-border pt-4">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">Total Outstanding</p>
+              <p className="font-bold font-mono">{fmtCurrency(client.totalOutstanding, "MUR")}</p>
+            </div>
+
+            <div className="border-t border-border pt-4">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">Overdue Amount</p>
               <p className={cn("font-bold font-mono", client.overdueAmount > 0 ? "text-red-500" : "text-muted-foreground")}>
                 {client.overdueAmount > 0 ? fmtCurrency(client.overdueAmount, "MUR") : "None"}
               </p>
             </div>
           </div>
+
           <div className="bg-card border border-border rounded-xl p-5">
             <h2 className="font-semibold text-sm mb-3">Primary Contacts</h2>
-            {contacts.filter(c => c.company === client.company).map(c => (
+
+            {linkedContacts.map(c => (
               <div key={c.id} className="mb-3">
                 <p className="font-medium text-sm">{c.name}</p>
                 <p className="text-xs text-muted-foreground">{c.role}</p>
+
                 <div className="flex gap-2 mt-1">
-                  <a href={`mailto:${c.email}`} className="p-1.5 rounded bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-3 h-3" /></a>
-                  <a href={`tel:${c.phone}`} className="p-1.5 rounded bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"><Phone className="w-3 h-3" /></a>
+                  <a
+                    href={`mailto:${c.email}`}
+                    className="p-1.5 rounded bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Mail className="w-3 h-3" />
+                  </a>
+
+                  <a
+                    href={`tel:${c.phone}`}
+                    className="p-1.5 rounded bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Phone className="w-3 h-3" />
+                  </a>
                 </div>
               </div>
             ))}
-            {contacts.filter(c => c.company === client.company).length === 0 && <p className="text-sm text-muted-foreground">No contacts linked to this client yet.</p>}
+
+            {linkedContacts.length === 0 && (
+              <p className="text-sm text-muted-foreground">No contacts linked to this client yet.</p>
+            )}
           </div>
         </div>
       </div>
 
       {editOpen && (
-        <EditClientModal client={client} onClose={() => setEditOpen(false)} onSave={handleEdit} />
+        <EditClientModal
+          client={client}
+          onClose={() => setEditOpen(false)}
+          onSave={handleEdit}
+        />
       )}
+
       {deleteOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 backdrop-blur-sm px-3 py-6 sm:px-6 sm:py-10">
           <div className="mx-auto bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-sm shadow-2xl">
-            <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3"><Trash2 className="w-5 h-5 text-red-500" /></div>
+            <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center mb-3">
+              <Trash2 className="w-5 h-5 text-red-500" />
+            </div>
+
             <h2 className="font-bold text-lg mb-1">Delete client?</h2>
-            <p className="text-sm text-muted-foreground mb-5">This will permanently remove <strong>{client.company}</strong> from the database.</p>
+
+            <p className="text-sm text-muted-foreground mb-5">
+              This will permanently remove <strong>{client.company}</strong> from the database.
+            </p>
+
             <div className="flex gap-2">
-              <button onClick={() => setDeleteOpen(false)} className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent">Cancel</button>
-              <button onClick={handleDelete} className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90">Delete</button>
+              <button
+                onClick={() => setDeleteOpen(false)}
+                className="flex-1 py-2 border border-border rounded-md text-sm hover:bg-accent"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:opacity-90"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
@@ -2995,7 +3209,7 @@ function RenewalCalendar({ contracts }: { contracts: Contract[] }) {
   );
 }
 
-// ─── CONTRACTS PAGE ───────────────────────────────────────────────────────────
+// ─── CONTRACTS PAGE ──────────────────────────────────────────────────────────
 
 function ContractsPage({ contracts, clients, contacts, setContracts, onDetail, toast }: {
   contracts: Contract[]; clients: Client[]; contacts: Contact[]; setContracts: (c: Contract[]) => void;
@@ -3217,7 +3431,7 @@ async function handleAdd(c: Contract) {
                     </tr>
                   ))}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-muted-foreground">No contracts match your filters</td></tr>
+                    <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">No contracts match your filters</td></tr>
                   )}
                 </tbody>
               </table>
@@ -4983,31 +5197,7 @@ if (!isSignedIn) {
                 />
               )}
 
-              {page === "contacts" && (
-                <ContactsPage
-                  contacts={contacts}
-                  setContacts={setContacts}
-                  onDetail={(c) => {
-                    setSelectedContact(c);
-                    navigate("contact-detail");
-                  }}
-                  clients={clients}
-                  contracts={contracts}
-                  setContracts={setContracts}
-                  toast={addToast}
-                />
-              )}
-
-              {page === "contact-detail" && selectedContact && (
-                <ContactDetailPage
-                  contact={selectedContact}
-                  contacts={contacts}
-                  setContacts={setContacts}
-                  clients={clients}
-                  onBack={() => navigate("contacts")}
-                  toast={addToast}
-                />
-              )}
+           
 
               {page === "contracts" && (
                 <ContractsPage
